@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# OS Junk
+.DS_Store
+Thumbs.db
+
+# Environment & IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache & logs
+__pycache__/
+*.pyc
+*.log
+
+# Internal agent metadata & PARA workspace folders
+.agents/
+.beads/
+artifacts/
+sessions/
+project.md
+repo/

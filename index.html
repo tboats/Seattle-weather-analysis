@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seattle Weather & Daylight Lag Visualizer</title>
+  <meta name="description" content="Interactive visualizer exploring Seattle's 1-year temperature observations, 10-year historical climate normals, daylight duration, thermal lag, and precipitation trends.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js Core -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="header-icon">🌤️</div>
+        <div>
+          <h1>Seattle Weather & Daylight Lag Analysis</h1>
+          <p class="subtitle">Exploring 1-Year Temperature Observations, Climate Normals, Solar Lag, and Precipitation in Seattle, WA</p>
+        </div>
+      </div>
+      <div class="header-controls">
+        <button id="unit-toggle-btn" class="btn btn-secondary">
+          <span class="unit-label">Units:</span> <strong id="unit-indicator">°F / in</strong>
+        </button>
+        <button id="refresh-data-btn" class="btn btn-primary">
+          <span class="icon">🔄</span> Reload Data
+        </button>
+      </div>
+    </header>
+
+    <!-- Key Metrics Cards -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-icon">☀️</div>
+        <div class="metric-data">
+          <span class="metric-label">Peak Sun Date (Solstice)</span>
+          <span class="metric-value" id="val-peak-sun">June 21</span>
+          <span class="metric-sub">15.9 Hours Daylight</span>
+        </div>
+      </div>
+      <div class="metric-card highlight">
+        <div class="metric-icon">⏳</div>
+        <div class="metric-data">
+          <span class="metric-label">Observed Thermal Lag</span>
+          <span class="metric-value" id="val-thermal-lag">34 Days</span>
+          <span class="metric-sub" id="val-lag-corr">Max Correlation: r = 0.9808</span>
+        </div>
+      </div>
+      <div class="metric-card highlight-warm">
+        <div class="metric-icon">🌡️</div>
+        <div class="metric-data">
+          <span class="metric-label">Annual Temp Anomaly</span>
+          <span class="metric-value" id="val-annual-anomaly">+1.87°F Above Avg</span>
+          <span class="metric-sub" id="val-anomaly-percent">68.6% Days Warmer Lows</span>
+        </div>
+      </div>
+      <div class="metric-card highlight-blue">
+        <div class="metric-icon">🌧️</div>
+        <div class="metric-data">
+          <span class="metric-label">Annual Precipitation</span>
+          <span class="metric-value" id="val-precip-total">45.33 in</span>
+          <span class="metric-sub" id="val-precip-anomaly">-1.35 in (-2.9% vs Normal)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plot 1: Temperature Time Series -->
+    <section class="chart-section card">
+      <div class="chart-header">
+        <div>
+          <h2>1-Year Daily Temperature vs. Historical Baseline</h2>
+          <p class="chart-desc">
+            Two continuous lines show historical average high and low temperatures in Seattle. 
+            Toggle scatter points or 7-day rolling averages to clearly visualize temperature anomalies above/below normal.
+          </p>
+        </div>
+        <div class="chart-actions">
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-rolling" checked>
+            <span class="slider"></span>
+            <span class="toggle-text"><strong>7d Rolling Avg</strong></span>
+          </label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-scatter" checked>
+            <span class="slider"></span>
+            <span class="toggle-text">Daily Scatter</span>
+          </label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-range-fill" checked>
+            <span class="slider"></span>
+            <span class="toggle-text">Avg Range Fill</span>
+          </label>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="temp-timeseries-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- Month-by-Month & Seasonal Temperature Anomalies -->
+    <section class="chart-section card">
+      <div class="chart-header">
+        <div>
+          <h2>Month-by-Month & Seasonal Temperature Anomalies</h2>
+          <p class="chart-desc">
+            Comparing monthly temperature deviations against historical normals. 
+            Warming was heavily concentrated in the <strong>Winter (+3.66°F Lows)</strong> and <strong>Spring (+2.37°F Lows)</strong>, while <strong>Summer (+0.66°F Highs)</strong> remained closest to typical norms.
+          </p>
+        </div>
+      </div>
+
+      <!-- Seasonal Summary Cards -->
+      <div class="residuals-summary-panel">
+        <div class="res-stat-item">
+          <span class="res-stat-title">❄️ Winter (Dec – Feb)</span>
+          <span class="res-stat-val warm" id="val-season-winter">+3.66°F Lows</span>
+          <span class="res-stat-sub" id="val-season-winter-high">High Anomaly: +2.61°F</span>
+          <span class="res-stat-sub highlight-sub">Strongest Warming Peak 🔥</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">🌸 Spring (Mar – May)</span>
+          <span class="res-stat-val warm" id="val-season-spring">+2.37°F Lows</span>
+          <span class="res-stat-sub" id="val-season-spring-high">High Anomaly: +1.39°F</span>
+          <span class="res-stat-sub highlight-sub">Early Warm Spells</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">🍂 Autumn (Sep – Nov)</span>
+          <span class="res-stat-val warm" id="val-season-autumn">+1.88°F Lows</span>
+          <span class="res-stat-sub" id="val-season-autumn-high">High Anomaly: +1.30°F</span>
+          <span class="res-stat-sub highlight-sub">Mild Autumn Nights</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">☀️ Summer (Jun – Aug)</span>
+          <span class="res-stat-val" id="val-season-summer">+0.99°F Lows</span>
+          <span class="res-stat-sub" id="val-season-summer-high">High Anomaly: +0.66°F</span>
+          <span class="res-stat-sub highlight-sub">Near Historical Normal</span>
+        </div>
+      </div>
+
+      <div class="chart-wrapper-sm">
+        <canvas id="monthly-anomaly-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- Residuals Distribution Analysis & Variation Metrics -->
+    <section class="chart-section card">
+      <div class="chart-header">
+        <div>
+          <h2>Temperature Residuals & Variation Analysis</h2>
+          <p class="chart-desc">
+            Analyzing daily temperature anomalies (Observed − Historical Baseline) alongside standard deviation (σ) and interquartile range (IQR) metrics to compare against typical 10-year climate variation.
+          </p>
+        </div>
+      </div>
+      
+      <div class="residuals-summary-panel">
+        <div class="res-stat-item">
+          <span class="res-stat-title">High Temp Anomaly & Variation</span>
+          <span class="res-stat-val warm" id="val-high-res-mean">+1.46°F</span>
+          <span class="res-stat-sub" id="val-high-res-var">σ = ±5.67°F | IQR: -2.0° to +4.5°F</span>
+          <span class="res-stat-sub highlight-sub" id="val-high-res-comp">vs. Typical 10-Yr σ = 5.09°F (+0.58°F spread)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">Low Temp Anomaly & Variation</span>
+          <span class="res-stat-val warm" id="val-low-res-mean">+2.26°F</span>
+          <span class="res-stat-sub" id="val-low-res-var">σ = ±4.19°F | IQR: -0.7° to +4.9°F</span>
+          <span class="res-stat-sub highlight-sub" id="val-low-res-comp">vs. Typical 10-Yr σ = 3.87°F (+2.26°F warm shift)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">Variation Verdict</span>
+          <span class="res-stat-val warm-badge">HIGH WARM BIAS 🔥</span>
+          <span class="res-stat-sub">68.6% of low temps above normal</span>
+          <span class="res-stat-sub">Daytime highs show wider upper tail</span>
+        </div>
+      </div>
+
+      <div class="chart-wrapper-sm">
+        <canvas id="residuals-dist-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- Precipitation Analysis & Variation Metrics -->
+    <section class="chart-section card">
+      <div class="chart-header">
+        <div>
+          <h2>Precipitation Analysis & Variation Metrics</h2>
+          <p class="chart-desc">
+            Evaluating whether Seattle rainfall is above or below historical typical levels and analyzing rainfall volatility (σ) vs. typical climate variation.
+          </p>
+        </div>
+      </div>
+
+      <div class="precip-summary-panel">
+        <div class="res-stat-item">
+          <span class="res-stat-title">Total 1-Year Observed</span>
+          <span class="res-stat-val blue" id="val-precip-obs-stat">45.33 in</span>
+          <span class="res-stat-sub" id="val-precip-norm-sub">10-Yr Normal: 46.68 in (-2.9%)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">Daily Rainfall Volatility (σ)</span>
+          <span class="res-stat-val blue" id="val-precip-std-stat">σ = 0.235 in/d</span>
+          <span class="res-stat-sub highlight-sub" id="val-precip-std-comp">vs. Typical 10-Yr σ = 0.177 in/d (+32.8% spread)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">Heavy Downpours (≥ 0.50 in)</span>
+          <span class="res-stat-val blue" id="val-precip-heavy-stat">34 Days</span>
+          <span class="res-stat-sub highlight-sub" id="val-precip-heavy-comp">vs. Typical = 28.6 Days (+18.9% more downpours)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">Precipitation Character</span>
+          <span class="res-stat-val blue-badge" id="val-precip-status-badge">MORE VOLATILE 🌧️</span>
+          <span class="res-stat-sub" id="val-rain-days-sub">152 Wet Days (16.7% fewer light rain days)</span>
+        </div>
+      </div>
+
+      <div class="analysis-grid">
+        <div class="chart-subpanel">
+          <h3>Daily Rainfall & 7-Day Rolling Average Rate</h3>
+          <div class="chart-wrapper-sm">
+            <canvas id="precip-daily-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-subpanel">
+          <h3>Cumulative Rainfall Accumulation Trajectory</h3>
+          <div class="chart-wrapper-sm">
+            <canvas id="precip-cum-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plot 2 & Interactive Lag Analysis -->
+    <section class="chart-section card">
+      <div class="chart-header">
+        <div>
+          <h2>Sun Up Time vs. Average Temperature (Thermal Lag Exploration)</h2>
+          <p class="chart-desc">
+            Comparing daylight duration (hours of sun up time) against daily average temperature in Seattle. 
+            Use the interactive slider to shift the daylight curve forward in time and observe how thermal inertia causes temperature to lag solar irradiance.
+          </p>
+        </div>
+      </div>
+
+      <!-- Interactive Slider Control -->
+      <div class="lag-control-panel">
+        <div class="slider-container">
+          <div class="slider-header">
+            <label for="lag-slider"><strong>Shift Daylight Curve (Lag Offset):</strong> <span id="slider-days-display" class="badge">0 Days</span></label>
+            <span id="slider-corr-display" class="badge badge-outline">Correlation r = 0.8124</span>
+          </div>
+          <input type="range" id="lag-slider" min="0" max="60" value="0" step="1" class="custom-range">
+          <div class="slider-ticks">
+            <span>0d (Solstice)</span>
+            <span>15d</span>
+            <span class="highlight-tick">34d (Optimal Fit)</span>
+            <span>45d</span>
+            <span>60d</span>
+          </div>
+        </div>
+        <div class="slider-quick-actions">
+          <button id="btn-lag-0" class="btn btn-sm">Reset (0 Days)</button>
+          <button id="btn-lag-optimal" class="btn btn-sm btn-accent">Set Optimal Lag (34 Days)</button>
+        </div>
+      </div>
+
+      <div class="chart-wrapper">
+        <canvas id="sun-temp-lag-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- Secondary Analysis Grid -->
+    <div class="analysis-grid">
+      <!-- Cross Correlation Plot -->
+      <section class="chart-section card">
+        <div class="chart-header">
+          <div>
+            <h3>Cross-Correlation Spectrum R(τ)</h3>
+            <p class="chart-desc">Correlation coefficient between daylight duration and average temperature across time shifts τ.</p>
+          </div>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="cross-corr-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Hysteresis Plot -->
+      <section class="chart-section card">
+        <div class="chart-header">
+          <div>
+            <h3>Seasonal Hysteresis Loop</h3>
+            <p class="chart-desc">Daylight hours vs Mean Temperature showing thermal hysteresis between warming Spring and cooling Autumn.</p>
+          </div>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="hysteresis-chart"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <!-- Insights Footer -->
+    <footer class="app-footer card">
+      <h3>💡 Physical Context & Insights</h3>
+      <div class="insights-grid">
+        <div class="insight-item">
+          <h4>Why is Winter Warming Strongest?</h4>
+          <p>
+            Seattle winter temperatures showed an exceptionally strong warming anomaly (+3.66°F Lows, +2.61°F Highs). Southerly Pacific storm tracks and marine cloud cover prevent radiational cooling during long winter nights.
+          </p>
+        </div>
+        <div class="insight-item">
+          <h4>Precipitation Volatility Insight</h4>
+          <p>
+            Seattle rainfall was 32.8% more volatile than typical climate variation (σ = 0.235 in/d vs 0.177 in/d). The year featured 18.9% more heavy downpour days (≥0.50 in) separated by longer dry spells.
+          </p>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Data Preload for file:// protocol resilience -->
+  <script src="weather_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
