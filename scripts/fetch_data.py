@@ -85,13 +85,13 @@ def fetch_seattle_weather():
     typical_hist_wet_days = round(sum(1 for p in all_hist_precip if p >= 0.01) / len(hist_annual_maxes), 1) if hist_annual_maxes else 182.4
     typical_hist_heavy_days = round(sum(1 for p in all_hist_precip if p >= 0.50) / len(hist_annual_maxes), 1) if hist_annual_maxes else 28.6
 
-    # 2. Fetch past 1 year daily observed weather data
+    # 2. Fetch past 1 year daily observed weather data (Archive + Recent Forecast API for real-time completeness)
     end_dt = datetime.now()
     start_dt = end_dt - timedelta(days=365)
     start_str = start_dt.strftime('%Y-%m-%d')
     end_str = end_dt.strftime('%Y-%m-%d')
 
-    print(f"Fetching 1-year observed daily weather ({start_str} to {end_str})...")
+    print(f"Fetching 1-year observed daily weather archive ({start_str} to {end_str})...")
     obs_url = (
         f"https://archive-api.open-meteo.com/v1/archive?"
         f"latitude={lat}&longitude={lon}&"
@@ -105,13 +105,8 @@ def fetch_seattle_weather():
         obs_raw = json.loads(resp.read().decode())
 
     obs_daily = obs_raw['daily']
-    observations = []
+    obs_map = {}
     
-    cum_obs_pr = 0.0
-    cum_norm_pr = 0.0
-    
-    by_month_data = defaultdict(lambda: {'h_obs': [], 'h_avg': [], 'l_obs': [], 'l_avg': [], 'm_obs': [], 'm_avg': []})
-
     for t, h, l, m, d, sr, ss, pr in zip(
         obs_daily['time'],
         obs_daily['temperature_2m_max'],
@@ -122,6 +117,50 @@ def fetch_seattle_weather():
         obs_daily['sunset'],
         obs_daily['precipitation_sum']
     ):
+        obs_map[t] = {
+            'h': h, 'l': l, 'm': m, 'd': d, 'sr': sr, 'ss': ss, 'pr': pr
+        }
+
+    # Fetch recent days from Forecast API to overwrite any missing or outdated recent days up to today
+    print("Fetching recent real-time observations to guarantee full 365-day dataset up to today...")
+    recent_url = (
+        f"https://api.open-meteo.com/v1/forecast?"
+        f"latitude={lat}&longitude={lon}&"
+        f"daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,daylight_duration,sunrise,sunset,precipitation_sum&"
+        f"past_days=14&forecast_days=1&"
+        f"temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FLos_Angeles"
+    )
+    try:
+        req_rec = urllib.request.Request(recent_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req_rec) as resp:
+            rec_raw = json.loads(resp.read().decode())
+        rec_daily = rec_raw['daily']
+        for t, h, l, m, d, sr, ss, pr in zip(
+            rec_daily['time'],
+            rec_daily['temperature_2m_max'],
+            rec_daily['temperature_2m_min'],
+            rec_daily['temperature_2m_mean'],
+            rec_daily['daylight_duration'],
+            rec_daily['sunrise'],
+            rec_daily['sunset'],
+            rec_daily['precipitation_sum']
+        ):
+            if h is not None or t not in obs_map:
+                obs_map[t] = {
+                    'h': h, 'l': l, 'm': m, 'd': d, 'sr': sr, 'ss': ss, 'pr': pr
+                }
+    except Exception as e:
+        print("Warning: could not fetch recent forecast API data:", e)
+
+    sorted_times = sorted(obs_map.keys())[-365:]
+    observations = []
+    cum_obs_pr = 0.0
+    cum_norm_pr = 0.0
+    by_month_data = defaultdict(lambda: {'h_obs': [], 'h_avg': [], 'l_obs': [], 'l_avg': [], 'm_obs': [], 'm_avg': []})
+
+    for t in sorted_times:
+        item = obs_map[t]
+        h, l, m, d, sr, ss, pr = item['h'], item['l'], item['m'], item['d'], item['sr'], item['ss'], item['pr']
         mmdd = t[5:]
         m_key = t[:7] # YYYY-MM
         normal = climate_normals.get(mmdd, {
@@ -151,8 +190,8 @@ def fetch_seattle_weather():
             'observed_low': l,
             'observed_mean': m,
             'daylight_hours': daylight_hrs,
-            'sunrise': sr[11:] if sr else None,
-            'sunset': ss[11:] if ss else None,
+            'sunrise': sr[11:] if sr and len(sr) >= 16 else None,
+            'sunset': ss[11:] if ss and len(ss) >= 16 else None,
             'observed_precip_in': p_val,
             'cum_observed_precip_in': round(cum_obs_pr, 2),
             'cum_avg_precip_in': round(cum_norm_pr, 2),
@@ -325,10 +364,7 @@ def fetch_seattle_weather():
     with open(js_path, 'w') as f:
         f.write(f"window.SEATTLE_WEATHER_DATA = {json.dumps(result, indent=2)};")
         
-    print("Data saved successfully!")
-    print(f"Seasonal Anomalies:")
-    for s_name, res in seasonal_anomalies.items():
-        print(f"  {s_name}: High = {res['high_anomaly']:+.2f}°F, Low = {res['low_anomaly']:+.2f}°F")
+    print(f"Data saved successfully! Date bounds: {observations[0]['date']} to {observations[-1]['date']} ({len(observations)} days)")
 
 if __name__ == '__main__':
     fetch_seattle_weather()

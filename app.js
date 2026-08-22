@@ -150,20 +150,12 @@ if (document.readyState === 'loading') {
 }
 
 async function loadWeatherData() {
-  if (window.SEATTLE_WEATHER_DATA && window.SEATTLE_WEATHER_DATA.observations) {
-    console.log('Loaded weather data via window.SEATTLE_WEATHER_DATA');
-    appState.data = window.SEATTLE_WEATHER_DATA;
-    ensureMonthlyDataPresent();
-    updateHeaderMetrics();
-    renderAllCharts();
-    return;
-  }
-
+  const ts = Date.now();
   const candidatePaths = [
-    'weather_data.json',
-    'public/weather_data.json',
-    './weather_data.json',
-    './public/weather_data.json'
+    `weather_data.json?v=${ts}`,
+    `public/weather_data.json?v=${ts}`,
+    `./weather_data.json?v=${ts}`,
+    `./public/weather_data.json?v=${ts}`
   ];
 
   for (const path of candidatePaths) {
@@ -171,15 +163,25 @@ async function loadWeatherData() {
       const response = await fetch(path);
       if (response.ok) {
         appState.data = await response.json();
-        console.log(`Loaded weather data successfully from: ${path}`);
+        console.log(`Loaded fresh weather data from HTTP: ${path}`);
         ensureMonthlyDataPresent();
         updateHeaderMetrics();
         renderAllCharts();
         return;
       }
     } catch (err) {
-      console.warn(`Failed fetching from ${path}:`, err);
+      console.warn(`Fetch failed for ${path}:`, err);
     }
+  }
+
+  // Fallback to window.SEATTLE_WEATHER_DATA if running via file:// protocol
+  if (window.SEATTLE_WEATHER_DATA && window.SEATTLE_WEATHER_DATA.observations) {
+    console.log('Loaded weather data via window.SEATTLE_WEATHER_DATA fallback');
+    appState.data = window.SEATTLE_WEATHER_DATA;
+    ensureMonthlyDataPresent();
+    updateHeaderMetrics();
+    renderAllCharts();
+    return;
   }
 
   console.error('Failed to load weather data from candidate paths.');
@@ -621,8 +623,6 @@ function renderMonthlyAnomalyChart() {
     charts.monthlyAnomaly.destroy();
   }
 
-  // HIGH TEMP ANOMALY: Sunburst Amber / Flame Gold (#ff6f00 / #ffab00) for positive, Ocean Blue (#0288d1) for negative
-  // LOW TEMP ANOMALY: Nightfall Electric Violet / Indigo (#7c4dff / #b388ff) for positive, Deep Cyan (#00e5ff) for negative
   charts.monthlyAnomaly = new Chart(ctx, {
     type: 'bar',
     data: {
