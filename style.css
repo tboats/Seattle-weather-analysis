@@ -664,6 +664,47 @@ h3 {
   height: 320px;
 }
 
+/* Inflection Badges Row */
+.inflection-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inflection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+}
+
+.inflection-pill.warm {
+  border-color: rgba(0, 230, 118, 0.3);
+  background: rgba(0, 230, 118, 0.08);
+}
+
+.inflection-pill.warm strong {
+  color: #00e676;
+}
+
+.inflection-pill.cool {
+  border-color: rgba(255, 23, 68, 0.3);
+  background: rgba(255, 23, 68, 0.08);
+}
+
+.inflection-pill.cool strong {
+  color: #ff5252;
+}
+
+.pill-label {
+  color: var(--text-dim);
+}
+
 /* Toggle Group Compact */
 .toggle-group-compact {
   display: flex;

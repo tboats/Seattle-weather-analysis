@@ -1237,6 +1237,21 @@ function updateHarmonicSection() {
   const elR2 = document.getElementById('val-h-r2');
   if (elR2) elR2.textContent = `${(hData.r2_full * 100).toFixed(1)}%`;
 
+  // Update Inflection Point Badges
+  const elInflectWarm = document.getElementById('val-inflect-warm');
+  if (elInflectWarm) {
+    const warmDate = formatDateLabel(`2026-${hData.max_warming_day}`);
+    const warmRate = (hData.max_warming_rate * convDelta).toFixed(3);
+    elInflectWarm.textContent = `${warmDate} (+${warmRate}${unitLabel}/d)`;
+  }
+
+  const elInflectCool = document.getElementById('val-inflect-cool');
+  if (elInflectCool) {
+    const coolDate = formatDateLabel(`2026-${hData.max_cooling_day}`);
+    const coolRate = (hData.max_cooling_rate * convDelta).toFixed(3);
+    elInflectCool.textContent = `${coolDate} (${coolRate}${unitLabel}/d)`;
+  }
+
   // 2. Render Both Harmonic Charts
   renderHarmonicWaveformChart();
   renderHarmonicDerivativeChart();
@@ -1376,6 +1391,18 @@ function renderHarmonicDerivativeChart() {
   const derivComposite = hData.curves.derivative.map(v => v * convDelta);
   const derivH1 = hData.curves.derivative_h1.map(v => v * convDelta);
 
+  const warmIdx = hData.curves.days.indexOf(hData.max_warming_day);
+  const coolIdx = hData.curves.days.indexOf(hData.max_cooling_day);
+  const warmDateStr = formatDateLabel(`2026-${hData.max_warming_day}`);
+  const coolDateStr = formatDateLabel(`2026-${hData.max_cooling_day}`);
+  const warmRateVal = derivComposite[warmIdx];
+  const coolRateVal = derivComposite[coolIdx];
+
+  const warmMarkerData = new Array(labels.length).fill(null);
+  if (warmIdx >= 0) warmMarkerData[warmIdx] = warmRateVal;
+  const coolMarkerData = new Array(labels.length).fill(null);
+  if (coolIdx >= 0) coolMarkerData[coolIdx] = coolRateVal;
+
   if (charts.harmonicDerivative) {
     charts.harmonicDerivative.destroy();
   }
@@ -1385,6 +1412,28 @@ function renderHarmonicDerivativeChart() {
     data: {
       labels: labels,
       datasets: [
+        {
+          label: `Steepest Increase: ${warmDateStr} (+${warmRateVal.toFixed(3)} ${unitRate})`,
+          data: warmMarkerData,
+          borderColor: '#00e676',
+          backgroundColor: '#00e676',
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          pointStyle: 'circle',
+          showLine: false,
+          order: 0
+        },
+        {
+          label: `Steepest Decrease: ${coolDateStr} (${coolRateVal.toFixed(3)} ${unitRate})`,
+          data: coolMarkerData,
+          borderColor: '#ff1744',
+          backgroundColor: '#ff1744',
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          pointStyle: 'circle',
+          showLine: false,
+          order: 0
+        },
         {
           label: `Symmetric 1st Harm Rate (${unitRate})`,
           data: derivH1,
