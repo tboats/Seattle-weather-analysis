@@ -76,6 +76,57 @@ def fetch_seattle_weather():
             'std_precip': round(s_p, 3)
         }
 
+    # 2-Harmonic Fourier Regression to smooth daily normals and remove 10-year synoptic sample noise
+    def fit_fourier_2harmonics(y_list):
+        n = len(y_list)
+        omega = 2.0 * math.pi / n
+        a0 = sum(y_list) / n
+        a1 = (2.0 / n) * sum(y * math.cos(omega * t) for t, y in enumerate(y_list))
+        b1 = (2.0 / n) * sum(y * math.sin(omega * t) for t, y in enumerate(y_list))
+        a2 = (2.0 / n) * sum(y * math.cos(2.0 * omega * t) for t, y in enumerate(y_list))
+        b2 = (2.0 / n) * sum(y * math.sin(2.0 * omega * t) for t, y in enumerate(y_list))
+        
+        def eval_at(t_val):
+            return (a0 + 
+                    a1 * math.cos(omega * t_val) + b1 * math.sin(omega * t_val) + 
+                    a2 * math.cos(2.0 * omega * t_val) + b2 * math.sin(2.0 * omega * t_val))
+                    
+        return [eval_at(t) for t in range(n)], eval_at
+
+    days_365 = [d for d in sorted(climate_normals.keys()) if d != '02-29']
+    raw_highs = [climate_normals[d]['avg_high'] for d in days_365]
+    raw_lows = [climate_normals[d]['avg_low'] for d in days_365]
+    raw_means = [climate_normals[d]['avg_mean'] for d in days_365]
+
+    smooth_highs, eval_high = fit_fourier_2harmonics(raw_highs)
+    smooth_lows, eval_low = fit_fourier_2harmonics(raw_lows)
+    smooth_means, eval_mean = fit_fourier_2harmonics(raw_means)
+
+    for idx, d in enumerate(days_365):
+        climate_normals[d]['raw_avg_high'] = climate_normals[d]['avg_high']
+        climate_normals[d]['raw_avg_low'] = climate_normals[d]['avg_low']
+        climate_normals[d]['raw_avg_mean'] = climate_normals[d]['avg_mean']
+        
+        climate_normals[d]['avg_high'] = round(smooth_highs[idx], 1)
+        climate_normals[d]['avg_low'] = round(smooth_lows[idx], 1)
+        climate_normals[d]['avg_mean'] = round(smooth_means[idx], 1)
+        
+        climate_normals[d]['smooth_high'] = round(smooth_highs[idx], 1)
+        climate_normals[d]['smooth_low'] = round(smooth_lows[idx], 1)
+        climate_normals[d]['smooth_mean'] = round(smooth_means[idx], 1)
+
+    if '02-29' in climate_normals:
+        climate_normals['02-29']['raw_avg_high'] = climate_normals['02-29']['avg_high']
+        climate_normals['02-29']['raw_avg_low'] = climate_normals['02-29']['avg_low']
+        climate_normals['02-29']['raw_avg_mean'] = climate_normals['02-29']['avg_mean']
+        
+        climate_normals['02-29']['avg_high'] = round(eval_high(58.5), 1)
+        climate_normals['02-29']['avg_low'] = round(eval_low(58.5), 1)
+        climate_normals['02-29']['avg_mean'] = round(eval_mean(58.5), 1)
+        climate_normals['02-29']['smooth_high'] = round(eval_high(58.5), 1)
+        climate_normals['02-29']['smooth_low'] = round(eval_low(58.5), 1)
+        climate_normals['02-29']['smooth_mean'] = round(eval_mean(58.5), 1)
+
     typical_hist_std_high = round(sum(hist_std_highs) / len(hist_std_highs), 2) if hist_std_highs else 5.1
     typical_hist_std_low = round(sum(hist_std_lows) / len(hist_std_lows), 2) if hist_std_lows else 3.9
     typical_hist_std_precip = round(sum(hist_std_precip) / len(hist_std_precip), 3) if hist_std_precip else 0.177
@@ -198,6 +249,12 @@ def fetch_seattle_weather():
             'avg_high': normal['avg_high'],
             'avg_low': normal['avg_low'],
             'avg_mean': normal['avg_mean'],
+            'smooth_high': normal['avg_high'],
+            'smooth_low': normal['avg_low'],
+            'smooth_mean': normal['avg_mean'],
+            'raw_avg_high': normal.get('raw_avg_high', normal['avg_high']),
+            'raw_avg_low': normal.get('raw_avg_low', normal['avg_low']),
+            'raw_avg_mean': normal.get('raw_avg_mean', normal['avg_mean']),
             'avg_daylight_hrs': normal['avg_daylight_hrs'],
             'avg_precip_in': normal['avg_precip_in']
         })

@@ -478,7 +478,7 @@ function updateTempTimeSeriesChart() {
 
   const datasets = [
     {
-      label: `Avg High Baseline (°${appState.unit})`,
+      label: `10-Yr Baseline High (Smoothed) (°${appState.unit})`,
       data: avgHighs,
       borderColor: 'rgba(255, 112, 67, 0.6)',
       borderDash: [5, 5],
@@ -489,7 +489,7 @@ function updateTempTimeSeriesChart() {
       order: 3
     },
     {
-      label: `Avg Low Baseline (°${appState.unit})`,
+      label: `10-Yr Baseline Low (Smoothed) (°${appState.unit})`,
       data: avgLows,
       borderColor: 'rgba(41, 182, 246, 0.6)',
       borderDash: [5, 5],
