@@ -107,6 +107,116 @@
       </div>
     </section>
 
+    <!-- Harmonic Analysis & Seasonal Asymmetry (A1 vs A2) -->
+    <section class="chart-section card" id="section-harmonics">
+      <div class="chart-header">
+        <div>
+          <h2>Harmonic Decomposition & Seasonal Asymmetry ($A_1$ vs. $A_2$)</h2>
+          <p class="chart-desc">
+            Deconstructing Seattle's 10-year baseline into orthogonal Fourier harmonics:
+            <span class="formula-chip">T(t) = a₀ + A₁ cos(ωt - φ₁) + A₂ cos(2ωt - φ₂)</span>
+            The 1st harmonic ($A_1$) captures the primary solar heating cycle and oceanic thermal lag. 
+            The 2nd harmonic ($A_2$) uncovers Seattle's pronounced <strong>seasonal asymmetry</strong>: spring warming is throttled by marine stratus ("June Gloom"), whereas autumn cooling drops steeply.
+          </p>
+        </div>
+        <div class="chart-actions">
+          <div class="metric-pill-group">
+            <button class="pill-btn active" id="btn-harmonic-high">Highs</button>
+            <button class="pill-btn" id="btn-harmonic-mean">Means</button>
+            <button class="pill-btn" id="btn-harmonic-low">Lows</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compact KPI Badges -->
+      <div class="metrics-grid-compact">
+        <div class="metric-card-compact">
+          <div class="metric-label">1st Harmonic Amplitude (A₁)</div>
+          <div class="metric-value-compact" id="val-h1-amp">15.69°F</div>
+          <div class="metric-sub" id="val-h1-sub">Peak: Jul 21 • 95.4% Var Explained</div>
+        </div>
+        <div class="metric-card-compact">
+          <div class="metric-label">2nd Harmonic Amplitude (A₂)</div>
+          <div class="metric-value-compact" id="val-h2-amp">2.52°F</div>
+          <div class="metric-sub" id="val-h2-sub">Phase: 83.8° • +2.5% Skew Boost</div>
+        </div>
+        <div class="metric-card-compact">
+          <div class="metric-label">Seasonal Asymmetry Ratio</div>
+          <div class="metric-value-compact highlight-amber" id="val-asym-ratio">1.36× Faster</div>
+          <div class="metric-sub" id="val-asym-sub">Autumn Cooling (-0.35°F/d) vs Spring (+0.25°F/d)</div>
+        </div>
+        <div class="metric-card-compact">
+          <div class="metric-label">Total Fit Quality (R²)</div>
+          <div class="metric-value-compact highlight-blue" id="val-h-r2">97.9%</div>
+          <div class="metric-sub">Closed-Form Orthogonal Fourier Fit</div>
+        </div>
+      </div>
+
+      <!-- Side-by-Side Harmonic Charts -->
+      <div class="harmonic-charts-grid">
+        <div class="harmonic-chart-card">
+          <div class="subchart-header">
+            <div>
+              <h3>1. Waveform Component Decomposition</h3>
+              <p class="chart-desc-sm">How A₁ (symmetric annual) and A₂ (semi-annual skew) compose the smoothed baseline</p>
+            </div>
+            <div class="toggle-group-compact">
+              <label class="toggle-switch-sm"><input type="checkbox" id="toggle-h-raw" checked><span class="slider-sm"></span><span class="lbl-sm">Raw 10-Yr</span></label>
+              <label class="toggle-switch-sm"><input type="checkbox" id="toggle-h-h1" checked><span class="slider-sm"></span><span class="lbl-sm">1st Harm (A₁)</span></label>
+              <label class="toggle-switch-sm"><input type="checkbox" id="toggle-h-h2" checked><span class="slider-sm"></span><span class="lbl-sm">2nd Harm (A₂)</span></label>
+              <label class="toggle-switch-sm"><input type="checkbox" id="toggle-h-composite" checked><span class="slider-sm"></span><span class="lbl-sm">Composite</span></label>
+            </div>
+          </div>
+          <div class="chart-wrapper-sm">
+            <canvas id="harmonic-waveform-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="harmonic-chart-card">
+          <div class="subchart-header">
+            <div>
+              <h3>2. Daily Warming vs. Cooling Rate (dT/dt)</h3>
+              <p class="chart-desc-sm">Daily temperature slope in °F/day showing spring stagnation vs. autumn plunge</p>
+            </div>
+          </div>
+          <div class="chart-wrapper-sm">
+            <canvas id="harmonic-derivative-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Explainer Box -->
+      <div class="explainer-box">
+        <h4>📐 Why both cos(ωt) and sin(ωt)? And why does A₂ represent Asymmetry?</h4>
+        <div class="explainer-grid">
+          <div class="explainer-col">
+            <h5>1. Free Phase via Linear Regression</h5>
+            <p>
+              By the harmonic identity: <code>A cos(ωt - φ) = a cos(ωt) + b sin(ωt)</code>. 
+              Fitting amplitude <em>A</em> and phase <em>φ</em> directly is non-linear and requires numerical approximations. 
+              Expanding into orthogonal <code>cos</code> and <code>sin</code> basis functions makes regression strictly linear, yielding an analytical closed-form solution with zero local minima.
+            </p>
+          </div>
+          <div class="explainer-col">
+            <h5>2. The Role of Phase φ₁: Thermal Lag</h5>
+            <p>
+              A pure cosine without phase would lock its maximum to Jan 1 (t=0). 
+              The phase shift <code>φ₁ = -161.5°</code> rotates the peak forward to <strong>July 21</strong> (for highs) and <strong>July 29</strong> (for lows). 
+              This phase angle physically quantifies the ~30–34 day thermal lag of the Pacific Ocean and Puget Sound behind the summer solstice.
+            </p>
+          </div>
+          <div class="explainer-col">
+            <h5>3. The Role of A₂ &amp; φ₂: The Asymmetry Engine</h5>
+            <p>
+              A single sinusoid is strictly symmetric (182.5 days warming, 182.5 days cooling). 
+              The 2nd harmonic oscillates twice a year (T = 182.6 d). With <code>A₂ = 2.52°F</code> and phase <code>φ₂ = 83.8°</code>, it flattens the spring heating rate (+0.25°F/day) and accelerates the autumn cooling rate (-0.35°F/day). 
+              Autumn cools <strong>1.36× faster</strong> than spring warms!
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Month-by-Month & Seasonal Temperature Anomalies -->
     <section class="chart-section card">
       <div class="chart-header">

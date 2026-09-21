@@ -384,6 +384,81 @@ def fetch_seattle_weather():
         }
     }
 
+    # 6. Detailed Harmonic Analysis & Seasonal Asymmetry (A1 vs A2)
+    def compute_harmonic_payload(series_raw):
+        n = len(series_raw)
+        omega = 2.0 * math.pi / n
+        a0 = sum(series_raw) / n
+        a1 = (2.0 / n) * sum(y * math.cos(omega * t) for t, y in enumerate(series_raw))
+        b1 = (2.0 / n) * sum(y * math.sin(omega * t) for t, y in enumerate(series_raw))
+        a2 = (2.0 / n) * sum(y * math.cos(2.0 * omega * t) for t, y in enumerate(series_raw))
+        b2 = (2.0 / n) * sum(y * math.sin(2.0 * omega * t) for t, y in enumerate(series_raw))
+        
+        A1 = math.sqrt(a1**2 + b1**2)
+        phi1 = math.atan2(b1, a1)
+        t_peak1 = (phi1 / omega) % n
+        
+        A2 = math.sqrt(a2**2 + b2**2)
+        phi2 = math.atan2(b2, a2)
+        
+        h1_curve = [round(a0 + a1 * math.cos(omega * t) + b1 * math.sin(omega * t), 2) for t in range(n)]
+        h2_comp = [round(a2 * math.cos(2.0 * omega * t) + b2 * math.sin(2.0 * omega * t), 2) for t in range(n)]
+        composite = [round(h1_curve[t] + h2_comp[t], 2) for t in range(n)]
+        
+        deriv = [
+            round(
+                -a1 * omega * math.sin(omega * t) + b1 * omega * math.cos(omega * t)
+                - 2.0 * a2 * omega * math.sin(2.0 * omega * t) + 2.0 * b2 * omega * math.cos(2.0 * omega * t),
+                3
+            ) for t in range(n)
+        ]
+        deriv_h1 = [
+            round(-a1 * omega * math.sin(omega * t) + b1 * omega * math.cos(omega * t), 3)
+            for t in range(n)
+        ]
+        
+        ss_tot = sum((y - a0)**2 for y in series_raw)
+        ss_res_h1 = sum((y - y_hat)**2 for y, y_hat in zip(series_raw, h1_curve))
+        ss_res_full = sum((y - y_hat)**2 for y, y_hat in zip(series_raw, composite))
+        
+        r2_h1 = round(1.0 - (ss_res_h1 / ss_tot), 4) if ss_tot else 1.0
+        r2_full = round(1.0 - (ss_res_full / ss_tot), 4) if ss_tot else 1.0
+        
+        max_warm_idx = deriv.index(max(deriv))
+        max_cool_idx = deriv.index(min(deriv))
+        
+        return {
+            'a0': round(a0, 2),
+            'a1': round(a1, 3), 'b1': round(b1, 3),
+            'a2': round(a2, 3), 'b2': round(b2, 3),
+            'A1': round(A1, 2), 'phi1_rad': round(phi1, 3), 'phi1_deg': round(phi1 * 180.0 / math.pi, 1),
+            'peak_day_1': dates_365[int(t_peak1)],
+            'r2_1': r2_h1,
+            'A2': round(A2, 2), 'phi2_rad': round(phi2, 3), 'phi2_deg': round(phi2 * 180.0 / math.pi, 1),
+            'r2_full': r2_full,
+            'r2_boost_pct': round((r2_full - r2_h1) * 100.0, 2),
+            'max_warming_rate': max(deriv),
+            'max_warming_day': dates_365[max_warm_idx],
+            'max_cooling_rate': min(deriv),
+            'max_cooling_day': dates_365[max_cool_idx],
+            'asymmetry_ratio': round(abs(min(deriv)) / max(deriv), 2) if max(deriv) > 0 else 1.0,
+            'curves': {
+                'days': dates_365,
+                'raw': [round(y, 1) for y in series_raw],
+                'harmonic1': h1_curve,
+                'harmonic2_component': h2_comp,
+                'composite': composite,
+                'derivative': deriv,
+                'derivative_h1': deriv_h1
+            }
+        }
+
+    harmonic_analysis = {
+        'high': compute_harmonic_payload([climate_normals[d]['raw_avg_high'] for d in dates_365]),
+        'mean': compute_harmonic_payload([climate_normals[d]['raw_avg_mean'] for d in dates_365]),
+        'low': compute_harmonic_payload([climate_normals[d]['raw_avg_low'] for d in dates_365])
+    }
+
     result = {
         'location': 'Seattle, WA',
         'latitude': lat,
@@ -400,6 +475,7 @@ def fetch_seattle_weather():
         'residual_stats': residual_stats,
         'precip_stats': precip_stats,
         'climate_normals': climate_normals,
+        'harmonic_analysis': harmonic_analysis,
         'observations': observations,
         'cross_correlation': cross_corr
     }

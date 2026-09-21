@@ -540,6 +540,227 @@ h3 {
   color: var(--text-muted);
 }
 
+/* Formula Chip */
+.formula-chip {
+  display: inline-block;
+  margin: 0.3rem 0;
+  padding: 0.2rem 0.6rem;
+  background: rgba(255, 112, 67, 0.12);
+  border: 1px solid rgba(255, 112, 67, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent-orange);
+  font-family: monospace;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+/* Metric Pill Switchers */
+.metric-pill-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  gap: 4px;
+}
+
+.pill-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pill-btn:hover {
+  color: var(--text-main);
+}
+
+.pill-btn.active {
+  background: var(--accent-orange);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(255, 112, 67, 0.4);
+}
+
+/* Metrics Grid Compact */
+.metrics-grid-compact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.metric-card-compact {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metric-value-compact {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.metric-value-compact.highlight-amber {
+  color: #ffa726;
+}
+
+.metric-value-compact.highlight-blue {
+  color: #42a5f5;
+}
+
+/* Harmonic Dual Charts Grid */
+.harmonic-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.harmonic-chart-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.subchart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.subchart-header h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.chart-desc-sm {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.chart-wrapper-sm {
+  position: relative;
+  width: 100%;
+  height: 320px;
+}
+
+/* Toggle Group Compact */
+.toggle-group-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.toggle-switch-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.toggle-switch-sm input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.slider-sm {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  transition: var(--transition-fast);
+}
+
+.slider-sm:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: var(--transition-fast);
+}
+
+.toggle-switch-sm input:checked + .slider-sm {
+  background-color: var(--accent-orange);
+}
+
+.toggle-switch-sm input:checked + .slider-sm:before {
+  transform: translateX(12px);
+}
+
+.lbl-sm {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Explainer Box */
+.explainer-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.4rem;
+}
+
+.explainer-box h4 {
+  font-size: 1rem;
+  color: var(--accent-amber);
+  margin-bottom: 1rem;
+}
+
+.explainer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.explainer-col h5 {
+  font-size: 0.9rem;
+  color: var(--text-main);
+  margin-bottom: 0.4rem;
+}
+
+.explainer-col p {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.explainer-col code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  color: #ffcc80;
+  font-size: 0.82rem;
+}
+
 /* Responsive Adjustments */
 @media (max-width: 768px) {
   body {
@@ -550,6 +771,9 @@ h3 {
     align-items: flex-start;
   }
   .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+  .harmonic-charts-grid {
     grid-template-columns: 1fr;
   }
   .chart-wrapper {

@@ -8,7 +8,14 @@ let appState = {
   showRolling: true,
   showRangeFill: true,
   currentLagDays: 0,
-  data: null
+  data: null,
+  harmonicSeries: 'high', // 'high', 'mean', 'low'
+  harmonicToggles: {
+    raw: true,
+    h1: true,
+    h2: true,
+    composite: true
+  }
 };
 
 // Chart Instances
@@ -20,7 +27,9 @@ let charts = {
   precipCum: null,
   sunTempLag: null,
   crossCorr: null,
-  hysteresis: null
+  hysteresis: null,
+  harmonicWaveform: null,
+  harmonicDerivative: null
 };
 
 // Helper Functions
@@ -269,6 +278,34 @@ function setupEventListeners() {
       loadWeatherData();
     });
   }
+
+  // Harmonic Analysis Series Switcher (Highs, Means, Lows)
+  const btnHarmonicHigh = document.getElementById('btn-harmonic-high');
+  const btnHarmonicMean = document.getElementById('btn-harmonic-mean');
+  const btnHarmonicLow = document.getElementById('btn-harmonic-low');
+
+  const setHarmonicSeries = (series, activeBtn) => {
+    appState.harmonicSeries = series;
+    [btnHarmonicHigh, btnHarmonicMean, btnHarmonicLow].forEach(b => {
+      if (b) b.classList.remove('active');
+    });
+    if (activeBtn) activeBtn.classList.add('active');
+    updateHarmonicSection();
+  };
+
+  if (btnHarmonicHigh) btnHarmonicHigh.addEventListener('click', () => setHarmonicSeries('high', btnHarmonicHigh));
+  if (btnHarmonicMean) btnHarmonicMean.addEventListener('click', () => setHarmonicSeries('mean', btnHarmonicMean));
+  if (btnHarmonicLow) btnHarmonicLow.addEventListener('click', () => setHarmonicSeries('low', btnHarmonicLow));
+
+  // Harmonic Waveform Curve Toggles
+  const tRaw = document.getElementById('toggle-h-raw');
+  if (tRaw) tRaw.addEventListener('change', (e) => { appState.harmonicToggles.raw = e.target.checked; renderHarmonicWaveformChart(); });
+  const tH1 = document.getElementById('toggle-h-h1');
+  if (tH1) tH1.addEventListener('change', (e) => { appState.harmonicToggles.h1 = e.target.checked; renderHarmonicWaveformChart(); });
+  const tH2 = document.getElementById('toggle-h-h2');
+  if (tH2) tH2.addEventListener('change', (e) => { appState.harmonicToggles.h2 = e.target.checked; renderHarmonicWaveformChart(); });
+  const tComp = document.getElementById('toggle-h-composite');
+  if (tComp) tComp.addEventListener('change', (e) => { appState.harmonicToggles.composite = e.target.checked; renderHarmonicWaveformChart(); });
 }
 
 function updateHeaderMetrics() {
@@ -456,6 +493,7 @@ function renderAllCharts() {
   try { updateSunTempLagChart(); } catch(e) { console.error('Error in updateSunTempLagChart:', e); }
   try { renderCrossCorrChart(); } catch(e) { console.error('Error in renderCrossCorrChart:', e); }
   try { renderHysteresisChart(); } catch(e) { console.error('Error in renderHysteresisChart:', e); }
+  try { updateHarmonicSection(); } catch(e) { console.error('Error in updateHarmonicSection:', e); }
 }
 
 // --------------------------------------------------------------------------
@@ -1150,6 +1188,255 @@ function renderHysteresisChart() {
         y: {
           title: { display: true, text: `Daily Mean Temp (°${appState.unit})`, color: '#94a3b8' },
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#64748b' }
+        }
+      }
+    }
+  });
+}
+
+// --------------------------------------------------------------------------
+// Section: Harmonic Decomposition & Seasonal Asymmetry (A1 vs A2)
+// --------------------------------------------------------------------------
+function updateHarmonicSection() {
+  if (!appState.data || !appState.data.harmonic_analysis) return;
+  const hData = appState.data.harmonic_analysis[appState.harmonicSeries];
+  if (!hData) return;
+
+  const convDelta = appState.unit === 'C' ? (5 / 9) : 1.0;
+  const unitLabel = `°${appState.unit}`;
+
+  // 1. Update KPI Badges
+  const elH1Amp = document.getElementById('val-h1-amp');
+  if (elH1Amp) elH1Amp.textContent = `${(hData.A1 * convDelta).toFixed(2)}${unitLabel}`;
+
+  const elH1Sub = document.getElementById('val-h1-sub');
+  if (elH1Sub) {
+    const peakDateLabel = formatDateLabel(`2026-${hData.peak_day_1}`);
+    elH1Sub.textContent = `Peak: ${peakDateLabel} • ${(hData.r2_1 * 100).toFixed(1)}% Var Explained`;
+  }
+
+  const elH2Amp = document.getElementById('val-h2-amp');
+  if (elH2Amp) elH2Amp.textContent = `${(hData.A2 * convDelta).toFixed(2)}${unitLabel}`;
+
+  const elH2Sub = document.getElementById('val-h2-sub');
+  if (elH2Sub) {
+    elH2Sub.textContent = `Phase: ${hData.phi2_deg}° • +${hData.r2_boost_pct}% Skew Boost`;
+  }
+
+  const elAsym = document.getElementById('val-asym-ratio');
+  if (elAsym) elAsym.textContent = `${hData.asymmetry_ratio}× Faster`;
+
+  const elAsymSub = document.getElementById('val-asym-sub');
+  if (elAsymSub) {
+    const coolRate = (hData.max_cooling_rate * convDelta).toFixed(2);
+    const warmRate = (hData.max_warming_rate * convDelta).toFixed(2);
+    elAsymSub.textContent = `Autumn Cooling (${coolRate}${unitLabel}/d) vs Spring (+${warmRate}${unitLabel}/d)`;
+  }
+
+  const elR2 = document.getElementById('val-h-r2');
+  if (elR2) elR2.textContent = `${(hData.r2_full * 100).toFixed(1)}%`;
+
+  // 2. Render Both Harmonic Charts
+  renderHarmonicWaveformChart();
+  renderHarmonicDerivativeChart();
+}
+
+function renderHarmonicWaveformChart() {
+  const canvas = document.getElementById('harmonic-waveform-chart');
+  if (!canvas || !appState.data || !appState.data.harmonic_analysis) return;
+  const ctx = canvas.getContext('2d');
+  const hData = appState.data.harmonic_analysis[appState.harmonicSeries];
+  if (!hData) return;
+
+  const convTemp = (val) => appState.unit === 'C' ? fToC(val) : val;
+  const convDelta = appState.unit === 'C' ? (5 / 9) : 1.0;
+  const unitLabel = `°${appState.unit}`;
+
+  const labels = hData.curves.days.map(d => formatDateLabel(`2026-${d}`));
+  const datasets = [];
+
+  // Raw 10-Yr
+  if (appState.harmonicToggles.raw) {
+    datasets.push({
+      label: `Raw 10-Yr Mean (${unitLabel})`,
+      data: hData.curves.raw.map(convTemp),
+      borderColor: 'rgba(148, 163, 184, 0.4)',
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [2, 2],
+      pointRadius: 0,
+      tension: 0,
+      order: 4
+    });
+  }
+
+  // 1st Harmonic (A1, Annual symmetric)
+  if (appState.harmonicToggles.h1) {
+    datasets.push({
+      label: `1st Harmonic A₁ (Symmetric, ${unitLabel})`,
+      data: hData.curves.harmonic1.map(convTemp),
+      borderColor: '#42a5f5',
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      tension: 0.35,
+      order: 2
+    });
+  }
+
+  // 2nd Harmonic Component (A2, centered around mean a0 for contextual scale)
+  if (appState.harmonicToggles.h2) {
+    const a0Converted = convTemp(hData.a0);
+    datasets.push({
+      label: `2nd Harm A₂ (+ Mean a₀) (${unitLabel})`,
+      data: hData.curves.harmonic2_component.map(v => a0Converted + (v * convDelta)),
+      borderColor: '#ab47bc',
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderDash: [3, 3],
+      pointRadius: 0,
+      tension: 0.35,
+      order: 3
+    });
+  }
+
+  // Composite 2-Harmonic Fit
+  if (appState.harmonicToggles.composite) {
+    datasets.push({
+      label: `Composite Baseline (2-Harmonic) (${unitLabel})`,
+      data: hData.curves.composite.map(convTemp),
+      borderColor: '#ff7043',
+      backgroundColor: 'rgba(255, 112, 67, 0.08)',
+      fill: true,
+      borderWidth: 2.5,
+      pointRadius: 0,
+      tension: 0.35,
+      order: 1
+    });
+  }
+
+  if (charts.harmonicWaveform) {
+    charts.harmonicWaveform.destroy();
+  }
+
+  charts.harmonicWaveform = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } },
+        tooltip: {
+          backgroundColor: '#182030',
+          titleColor: '#f0f4f8',
+          bodyColor: '#cbd5e1',
+          borderColor: 'rgba(255, 255, 255, 0.15)',
+          borderWidth: 1,
+          callbacks: {
+            label: (context) => {
+              const val = context.parsed.y;
+              return `${context.dataset.label}: ${val !== null ? val.toFixed(1) : 'N/A'}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#64748b', maxTicksLimit: 12 }
+        },
+        y: {
+          title: { display: true, text: `Temperature (${unitLabel})`, color: '#94a3b8' },
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#64748b' }
+        }
+      }
+    }
+  });
+}
+
+function renderHarmonicDerivativeChart() {
+  const canvas = document.getElementById('harmonic-derivative-chart');
+  if (!canvas || !appState.data || !appState.data.harmonic_analysis) return;
+  const ctx = canvas.getContext('2d');
+  const hData = appState.data.harmonic_analysis[appState.harmonicSeries];
+  if (!hData) return;
+
+  const convDelta = appState.unit === 'C' ? (5 / 9) : 1.0;
+  const unitRate = `°${appState.unit}/day`;
+
+  const labels = hData.curves.days.map(d => formatDateLabel(`2026-${d}`));
+  const derivComposite = hData.curves.derivative.map(v => v * convDelta);
+  const derivH1 = hData.curves.derivative_h1.map(v => v * convDelta);
+
+  if (charts.harmonicDerivative) {
+    charts.harmonicDerivative.destroy();
+  }
+
+  charts.harmonicDerivative = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: `Symmetric 1st Harm Rate (${unitRate})`,
+          data: derivH1,
+          borderColor: 'rgba(148, 163, 184, 0.5)',
+          borderDash: [5, 5],
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.35,
+          order: 2
+        },
+        {
+          label: `True 2-Harmonic Slope (${unitRate})`,
+          data: derivComposite,
+          borderColor: '#26c6da',
+          backgroundColor: 'rgba(38, 198, 218, 0.08)',
+          fill: 'origin',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          tension: 0.35,
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } },
+        tooltip: {
+          backgroundColor: '#182030',
+          titleColor: '#f0f4f8',
+          bodyColor: '#cbd5e1',
+          borderColor: 'rgba(255, 255, 255, 0.15)',
+          borderWidth: 1,
+          callbacks: {
+            label: (context) => {
+              const val = context.parsed.y;
+              return `${context.dataset.label}: ${val >= 0 ? '+' : ''}${val.toFixed(3)} ${unitRate}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#64748b', maxTicksLimit: 12 }
+        },
+        y: {
+          title: { display: true, text: `Daily Change (${unitRate})`, color: '#94a3b8' },
+          grid: { color: 'rgba(255, 255, 255, 0.08)' },
           ticks: { color: '#64748b' }
         }
       }
