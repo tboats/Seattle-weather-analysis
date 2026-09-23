@@ -1,0 +1,39 @@
+name: Daily Seattle Weather Update
+
+on:
+  schedule:
+    # Runs daily at 06:00 UTC (11:00 PM PDT / 10:00 PM PST)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab anytime
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-weather:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fetch Latest Observations & Compute Smooth Normals
+        run: |
+          python scripts/fetch_data.py
+
+      - name: Commit and Push Updated Dataset
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add weather_data.json weather_data.js public/weather_data.json
+          if git diff --staged --quiet; then
+            echo "No new weather data changes to commit."
+          else
+            git commit -m "data: automated daily Seattle weather refresh [skip ci]"
+            git push
+          fi
