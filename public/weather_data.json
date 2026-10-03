@@ -2,7 +2,7 @@
   "location": "Seattle, WA",
   "latitude": 47.6062,
   "longitude": -122.3321,
-  "generated_at": "2026-10-03T11:13:32.062703",
+  "generated_at": "2026-10-03T13:15:04.332278",
   "best_lag_days": 34,
   "max_correlation": 0.9887,
   "total_observed_precip_in": 44.51,
@@ -84,9 +84,9 @@
     },
     {
       "month": "2026-10",
-      "high_anomaly": 3.3,
-      "low_anomaly": -0.17,
-      "mean_anomaly": 1.2
+      "high_anomaly": 2.2,
+      "low_anomaly": 0.0,
+      "mean_anomaly": 0.93
     }
   ],
   "seasonal_anomalies": {
@@ -106,15 +106,15 @@
       "mean_anomaly": 0.53
     },
     "Autumn": {
-      "high_anomaly": 0.37,
-      "low_anomaly": 0.49,
-      "mean_anomaly": 0.29
+      "high_anomaly": 0.1,
+      "low_anomaly": 0.53,
+      "mean_anomaly": 0.23
     }
   },
   "residual_stats": {
     "high": {
-      "mean": 1.03,
-      "std_dev": 5.46,
+      "mean": 1.02,
+      "std_dev": 5.45,
       "p25": -3.0,
       "p75": 4.1,
       "iqr": 7.1,
@@ -22526,9 +22526,9 @@
     {
       "date": "2026-10-03",
       "mmdd": "10-03",
-      "observed_high": 69.0,
-      "observed_low": 54.2,
-      "observed_mean": 59.6,
+      "observed_high": 65.7,
+      "observed_low": 54.7,
+      "observed_mean": 58.8,
       "daylight_hours": 11.55,
       "sunrise": "07:11",
       "sunset": "18:44",

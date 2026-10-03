@@ -174,6 +174,7 @@ async function loadWeatherData() {
         appState.data = await response.json();
         console.log(`Loaded fresh weather data from HTTP: ${path}`);
         ensureMonthlyDataPresent();
+        ensureHarmonicDataPresent();
         updateHeaderMetrics();
         renderAllCharts();
         return;
@@ -188,6 +189,7 @@ async function loadWeatherData() {
     console.log('Loaded weather data via window.SEATTLE_WEATHER_DATA fallback');
     appState.data = window.SEATTLE_WEATHER_DATA;
     ensureMonthlyDataPresent();
+    ensureHarmonicDataPresent();
     updateHeaderMetrics();
     renderAllCharts();
     return;
@@ -205,6 +207,125 @@ function ensureMonthlyDataPresent() {
   if (!appState.data.seasonal_anomalies) {
     appState.data.seasonal_anomalies = computeSeasonalAnomaliesFromMonthly(appState.data.monthly_anomalies);
   }
+}
+
+function ensureHarmonicDataPresent() {
+  if (!appState.data) return;
+  if (appState.data.harmonic_analysis && appState.data.harmonic_analysis.high) return;
+  
+  if (appState.data.climate_normals) {
+    console.log('Computing harmonic_analysis dynamically on client...');
+    const cn = appState.data.climate_normals;
+    const days365 = Object.keys(cn).filter(d => d !== '02-29').sort();
+    if (days365.length >= 360) {
+      const getSeries = (key, fallbackKey) => days365.map(d => {
+        const item = cn[d];
+        if (item[key] !== undefined && item[key] !== null) return item[key];
+        if (fallbackKey && item[fallbackKey] !== undefined && item[fallbackKey] !== null) return item[fallbackKey];
+        return item.avg_high || 60.0;
+      });
+
+      appState.data.harmonic_analysis = {
+        high: computeClientHarmonicPayload(getSeries('raw_avg_high', 'avg_high'), days365),
+        mean: computeClientHarmonicPayload(getSeries('raw_avg_mean', 'avg_mean'), days365),
+        low: computeClientHarmonicPayload(getSeries('raw_avg_low', 'avg_low'), days365)
+      };
+    }
+  }
+}
+
+function computeClientHarmonicPayload(seriesRaw, days365) {
+  const n = seriesRaw.length;
+  const omega = 2.0 * Math.PI / n;
+  const a0 = seriesRaw.reduce((a, b) => a + b, 0) / n;
+  let a1 = 0, b1 = 0, a2 = 0, b2 = 0;
+  for (let t = 0; t < n; t++) {
+    const y = seriesRaw[t];
+    a1 += y * Math.cos(omega * t);
+    b1 += y * Math.sin(omega * t);
+    a2 += y * Math.cos(2.0 * omega * t);
+    b2 += y * Math.sin(2.0 * omega * t);
+  }
+  a1 *= (2.0 / n);
+  b1 *= (2.0 / n);
+  a2 *= (2.0 / n);
+  b2 *= (2.0 / n);
+
+  const A1 = Math.sqrt(a1 * a1 + b1 * b1);
+  const phi1 = Math.atan2(b1, a1);
+  const tPeak1 = ((phi1 / omega) % n + n) % n;
+
+  const A2 = Math.sqrt(a2 * a2 + b2 * b2);
+  const phi2 = Math.atan2(b2, a2);
+
+  const h1Curve = [];
+  const h2Comp = [];
+  const composite = [];
+  const deriv = [];
+  const derivH1 = [];
+
+  for (let t = 0; t < n; t++) {
+    const h1 = a0 + a1 * Math.cos(omega * t) + b1 * Math.sin(omega * t);
+    const h2 = a2 * Math.cos(2.0 * omega * t) + b2 * Math.sin(2.0 * omega * t);
+    h1Curve.push(Math.round(h1 * 100) / 100);
+    h2Comp.push(Math.round(h2 * 100) / 100);
+    composite.push(Math.round((h1 + h2) * 100) / 100);
+
+    const d = -a1 * omega * Math.sin(omega * t) + b1 * omega * Math.cos(omega * t)
+              - 2.0 * a2 * omega * Math.sin(2.0 * omega * t) + 2.0 * b2 * omega * Math.cos(2.0 * omega * t);
+    const dH1 = -a1 * omega * Math.sin(omega * t) + b1 * omega * Math.cos(omega * t);
+    deriv.push(Math.round(d * 1000) / 1000);
+    derivH1.push(Math.round(dH1 * 1000) / 1000);
+  }
+
+  let maxWarmIdx = 0, maxCoolIdx = 0;
+  let maxWarmVal = deriv[0], minCoolVal = deriv[0];
+  for (let t = 1; t < n; t++) {
+    if (deriv[t] > maxWarmVal) { maxWarmVal = deriv[t]; maxWarmIdx = t; }
+    if (deriv[t] < minCoolVal) { minCoolVal = deriv[t]; maxCoolIdx = t; }
+  }
+
+  let ssTot = 0, ssResH1 = 0, ssResFull = 0;
+  for (let t = 0; t < n; t++) {
+    const y = seriesRaw[t];
+    ssTot += (y - a0) ** 2;
+    ssResH1 += (y - h1Curve[t]) ** 2;
+    ssResFull += (y - composite[t]) ** 2;
+  }
+  const r2H1 = ssTot ? Math.round((1.0 - (ssResH1 / ssTot)) * 10000) / 10000 : 1.0;
+  const r2Full = ssTot ? Math.round((1.0 - (ssResFull / ssTot)) * 10000) / 10000 : 1.0;
+
+  return {
+    a0: Math.round(a0 * 100) / 100,
+    a1: Math.round(a1 * 1000) / 1000,
+    b1: Math.round(b1 * 1000) / 1000,
+    a2: Math.round(a2 * 1000) / 1000,
+    b2: Math.round(b2 * 1000) / 1000,
+    A1: Math.round(A1 * 100) / 100,
+    phi1_rad: Math.round(phi1 * 1000) / 1000,
+    phi1_deg: Math.round(phi1 * 180.0 / Math.PI * 10) / 10,
+    peak_day_1: days365[Math.floor(tPeak1)],
+    r2_1: r2H1,
+    A2: Math.round(A2 * 100) / 100,
+    phi2_rad: Math.round(phi2 * 1000) / 1000,
+    phi2_deg: Math.round(phi2 * 180.0 / Math.PI * 10) / 10,
+    r2_full: r2Full,
+    r2_boost_pct: Math.round((r2Full - r2H1) * 10000) / 100,
+    max_warming_rate: maxWarmVal,
+    max_warming_day: days365[maxWarmIdx],
+    max_cooling_rate: minCoolVal,
+    max_cooling_day: days365[maxCoolIdx],
+    asymmetry_ratio: maxWarmVal > 0 ? Math.round(Math.abs(minCoolVal) / maxWarmVal * 100) / 100 : 1.0,
+    curves: {
+      days: days365,
+      raw: seriesRaw.map(y => Math.round(y * 10) / 10),
+      harmonic1: h1Curve,
+      harmonic2_component: h2Comp,
+      composite: composite,
+      derivative: deriv,
+      derivative_h1: derivH1
+    }
+  };
 }
 
 function setupEventListeners() {
@@ -1199,7 +1320,9 @@ function renderHysteresisChart() {
 // Section: Harmonic Decomposition & Seasonal Asymmetry (A1 vs A2)
 // --------------------------------------------------------------------------
 function updateHarmonicSection() {
-  if (!appState.data || !appState.data.harmonic_analysis) return;
+  if (!appState.data) return;
+  ensureHarmonicDataPresent();
+  if (!appState.data.harmonic_analysis) return;
   const hData = appState.data.harmonic_analysis[appState.harmonicSeries];
   if (!hData) return;
 
@@ -1393,10 +1516,14 @@ function renderHarmonicDerivativeChart() {
 
   const warmIdx = hData.curves.days.indexOf(hData.max_warming_day);
   const coolIdx = hData.curves.days.indexOf(hData.max_cooling_day);
-  const warmDateStr = formatDateLabel(`2026-${hData.max_warming_day}`);
-  const coolDateStr = formatDateLabel(`2026-${hData.max_cooling_day}`);
-  const warmRateVal = derivComposite[warmIdx];
-  const coolRateVal = derivComposite[coolIdx];
+  const warmDateStr = hData.max_warming_day ? formatDateLabel(`2026-${hData.max_warming_day}`) : 'Late Spring';
+  const coolDateStr = hData.max_cooling_day ? formatDateLabel(`2026-${hData.max_cooling_day}`) : 'Early Autumn';
+  const warmRateVal = (warmIdx >= 0 && derivComposite[warmIdx] !== undefined)
+    ? derivComposite[warmIdx]
+    : (hData.max_warming_rate * convDelta);
+  const coolRateVal = (coolIdx >= 0 && derivComposite[coolIdx] !== undefined)
+    ? derivComposite[coolIdx]
+    : (hData.max_cooling_rate * convDelta);
 
   const warmMarkerData = new Array(labels.length).fill(null);
   if (warmIdx >= 0) warmMarkerData[warmIdx] = warmRateVal;

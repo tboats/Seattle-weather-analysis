@@ -636,6 +636,7 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  min-width: 0;
 }
 
 .subchart-header {
@@ -661,7 +662,8 @@ h3 {
 .chart-wrapper-sm {
   position: relative;
   width: 100%;
-  height: 320px;
+  height: 340px;
+  min-height: 340px;
 }
 
 /* Inflection Badges Row */
