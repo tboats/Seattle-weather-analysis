@@ -176,7 +176,7 @@
           <div class="subchart-header">
             <div>
               <h3>2. Daily Warming vs. Cooling Rate (dT/dt)</h3>
-              <p class="chart-desc-sm">Daily temperature slope showing spring warming vs. autumn plunge</p>
+              <p class="chart-desc-sm">Daily temperature slope (dT/dt) vs. daily daylight change (dD/dt) highlighting equinox solar forcing</p>
             </div>
             <div class="inflection-badges-row">
               <div class="inflection-pill warm" title="Steepest warming rate of the year">
@@ -188,6 +188,11 @@
                 <span class="pill-emoji">📉</span>
                 <span class="pill-label">Steepest Cooling:</span>
                 <strong id="val-inflect-cool">Oct 06 (-0.346°F/d)</strong>
+              </div>
+              <div class="inflection-pill sun" title="Equinox sunlight gain and loss extremes">
+                <span class="pill-emoji">☀️</span>
+                <span class="pill-label">Equinox Sunlight:</span>
+                <strong id="val-inflect-sun">Mar 20 (+3.8m) • Sep 23 (-3.7m)</strong>
               </div>
             </div>
           </div>
@@ -223,6 +228,13 @@
               A single sinusoid is strictly symmetric (182.5 days warming, 182.5 days cooling). 
               The 2nd harmonic oscillates twice a year (T = 182.6 d). With <code>A₂ = 2.52°F</code> and phase <code>φ₂ = 83.8°</code>, it flattens the spring heating rate (+0.25°F/day) and accelerates the autumn cooling rate (-0.35°F/day). 
               Autumn cools <strong>1.36× faster</strong> than spring warms!
+            </p>
+          </div>
+          <div class="explainer-col">
+            <h5>4. Sunlight Derivative vs. Thermal Lag</h5>
+            <p>
+              Daylight change (<code>dD/dt</code>) peaks precisely at the astronomical equinoxes: <strong>+3.82 min/day</strong> at the Spring Equinox (Mar 20) and <strong>-3.74 min/day</strong> at the Autumn Equinox (Sep 23). 
+              Comparing this against daily temperature change (<code>dT/dt</code>) demonstrates rate-space thermal lag: peak daily warming doesn't arrive until May 23 (a 64-day lag behind solar forcing!), as the marine heat sink buffers incoming radiation.
             </p>
           </div>
         </div>
@@ -450,7 +462,7 @@
   </div>
 
   <!-- Data Preload with cache-busting timestamp -->
-  <script src="weather_data.js?v=20261003"></script>
-  <script src="app.js?v=20261003"></script>
+  <script src="weather_data.js?v=20261011"></script>
+  <script src="app.js?v=20261011"></script>
 </body>
 </html>

@@ -211,27 +211,89 @@ function ensureMonthlyDataPresent() {
 
 function ensureHarmonicDataPresent() {
   if (!appState.data) return;
-  if (appState.data.harmonic_analysis && appState.data.harmonic_analysis.high) return;
-  
-  if (appState.data.climate_normals) {
-    console.log('Computing harmonic_analysis dynamically on client...');
-    const cn = appState.data.climate_normals;
-    const days365 = Object.keys(cn).filter(d => d !== '02-29').sort();
-    if (days365.length >= 360) {
-      const getSeries = (key, fallbackKey) => days365.map(d => {
-        const item = cn[d];
-        if (item[key] !== undefined && item[key] !== null) return item[key];
-        if (fallbackKey && item[fallbackKey] !== undefined && item[fallbackKey] !== null) return item[fallbackKey];
-        return item.avg_high || 60.0;
-      });
+  const cn = appState.data.climate_normals;
+  if (!cn) return;
+  const days365 = Object.keys(cn).filter(d => d !== '02-29').sort();
 
-      appState.data.harmonic_analysis = {
-        high: computeClientHarmonicPayload(getSeries('raw_avg_high', 'avg_high'), days365),
-        mean: computeClientHarmonicPayload(getSeries('raw_avg_mean', 'avg_mean'), days365),
-        low: computeClientHarmonicPayload(getSeries('raw_avg_low', 'avg_low'), days365)
-      };
+  // 1. Ensure daylight harmonic payload is populated
+  if (appState.data.harmonic_analysis && !appState.data.harmonic_analysis.daylight) {
+    const sunSeries = days365.map(d => cn[d].avg_daylight_hrs || 12.0);
+    const sunPayload = computeClientDaylightPayload(sunSeries, days365);
+    appState.data.harmonic_analysis.daylight = sunPayload;
+    for (const k of ['high', 'mean', 'low']) {
+      if (appState.data.harmonic_analysis[k] && appState.data.harmonic_analysis[k].curves) {
+        appState.data.harmonic_analysis[k].curves.daylight_derivative = sunPayload.derivative;
+      }
     }
   }
+
+  // 2. If full harmonic analysis is already present, we are done
+  if (appState.data.harmonic_analysis && appState.data.harmonic_analysis.high) return;
+  
+  if (days365.length >= 360) {
+    console.log('Computing harmonic_analysis dynamically on client...');
+    const getSeries = (key, fallbackKey) => days365.map(d => {
+      const item = cn[d];
+      if (item[key] !== undefined && item[key] !== null) return item[key];
+      if (fallbackKey && item[fallbackKey] !== undefined && item[fallbackKey] !== null) return item[fallbackKey];
+      return item.avg_high || 60.0;
+    });
+
+    const sunSeries = days365.map(d => cn[d].avg_daylight_hrs || 12.0);
+    const sunPayload = computeClientDaylightPayload(sunSeries, days365);
+
+    appState.data.harmonic_analysis = {
+      high: computeClientHarmonicPayload(getSeries('raw_avg_high', 'avg_high'), days365),
+      mean: computeClientHarmonicPayload(getSeries('raw_avg_mean', 'avg_mean'), days365),
+      low: computeClientHarmonicPayload(getSeries('raw_avg_low', 'avg_low'), days365),
+      daylight: sunPayload
+    };
+
+    for (const k of ['high', 'mean', 'low']) {
+      appState.data.harmonic_analysis[k].curves.daylight_derivative = sunPayload.derivative;
+    }
+  }
+}
+
+function computeClientDaylightPayload(seriesHours, days365) {
+  const n = seriesHours.length;
+  const omega = 2.0 * Math.PI / n;
+  const a0 = seriesHours.reduce((a, b) => a + b, 0) / n;
+  let a1 = 0, b1 = 0, a2 = 0, b2 = 0;
+  for (let t = 0; t < n; t++) {
+    const y = seriesHours[t];
+    a1 += y * Math.cos(omega * t);
+    b1 += y * Math.sin(omega * t);
+    a2 += y * Math.cos(2.0 * omega * t);
+    b2 += y * Math.sin(2.0 * omega * t);
+  }
+  a1 *= (2.0 / n);
+  b1 *= (2.0 / n);
+  a2 *= (2.0 / n);
+  b2 *= (2.0 / n);
+
+  const derivUnrounded = [];
+  for (let t = 0; t < n; t++) {
+    const dHours = -a1 * omega * Math.sin(omega * t) + b1 * omega * Math.cos(omega * t)
+                   - 2.0 * a2 * omega * Math.sin(2.0 * omega * t) + 2.0 * b2 * omega * Math.cos(2.0 * omega * t);
+    derivUnrounded.push(dHours * 60.0);
+  }
+
+  let maxGainIdx = 0, maxLossIdx = 0;
+  let maxGainVal = derivUnrounded[0], maxLossVal = derivUnrounded[0];
+  for (let t = 1; t < n; t++) {
+    if (derivUnrounded[t] > maxGainVal) { maxGainVal = derivUnrounded[t]; maxGainIdx = t; }
+    if (derivUnrounded[t] < maxLossVal) { maxLossVal = derivUnrounded[t]; maxLossIdx = t; }
+  }
+
+  return {
+    a0_hrs: Math.round(a0 * 100) / 100,
+    max_gain_min_day: Math.round(maxGainVal * 100) / 100,
+    max_gain_day: days365[maxGainIdx],
+    max_loss_min_day: Math.round(maxLossVal * 100) / 100,
+    max_loss_day: days365[maxLossIdx],
+    derivative: derivUnrounded.map(v => Math.round(v * 100) / 100)
+  };
 }
 
 function computeClientHarmonicPayload(seriesRaw, days365) {
@@ -1375,6 +1437,16 @@ function updateHarmonicSection() {
     elInflectCool.textContent = `${coolDate} (${coolRate}${unitLabel}/d)`;
   }
 
+  const elInflectSun = document.getElementById('val-inflect-sun');
+  if (elInflectSun) {
+    const sunData = (appState.data.harmonic_analysis && appState.data.harmonic_analysis.daylight) || {};
+    const gainDate = sunData.max_gain_day ? formatDateLabel(`2026-${sunData.max_gain_day}`) : 'Mar 20';
+    const lossDate = sunData.max_loss_day ? formatDateLabel(`2026-${sunData.max_loss_day}`) : 'Sep 23';
+    const gainVal = sunData.max_gain_min_day !== undefined ? `+${sunData.max_gain_min_day.toFixed(1)}` : '+3.8';
+    const lossVal = sunData.max_loss_min_day !== undefined ? `${sunData.max_loss_min_day.toFixed(1)}` : '-3.7';
+    elInflectSun.textContent = `${gainDate} (${gainVal}m) • ${lossDate} (${lossVal}m)`;
+  }
+
   // 2. Render Both Harmonic Charts
   renderHarmonicWaveformChart();
   renderHarmonicDerivativeChart();
@@ -1514,6 +1586,9 @@ function renderHarmonicDerivativeChart() {
   const derivComposite = hData.curves.derivative.map(v => v * convDelta);
   const derivH1 = hData.curves.derivative_h1.map(v => v * convDelta);
 
+  const sunData = appState.data.harmonic_analysis.daylight || {};
+  const sunDeriv = (hData.curves.daylight_derivative || sunData.derivative || []);
+
   const warmIdx = hData.curves.days.indexOf(hData.max_warming_day);
   const coolIdx = hData.curves.days.indexOf(hData.max_cooling_day);
   const warmDateStr = hData.max_warming_day ? formatDateLabel(`2026-${hData.max_warming_day}`) : 'Late Spring';
@@ -1530,6 +1605,19 @@ function renderHarmonicDerivativeChart() {
   const coolMarkerData = new Array(labels.length).fill(null);
   if (coolIdx >= 0) coolMarkerData[coolIdx] = coolRateVal;
 
+  // Equinox daylight markers
+  const sunGainIdx = sunData.max_gain_day ? hData.curves.days.indexOf(sunData.max_gain_day) : -1;
+  const sunLossIdx = sunData.max_loss_day ? hData.curves.days.indexOf(sunData.max_loss_day) : -1;
+  const sunGainVal = sunData.max_gain_min_day !== undefined ? sunData.max_gain_min_day : (sunGainIdx >= 0 ? sunDeriv[sunGainIdx] : 3.82);
+  const sunLossVal = sunData.max_loss_min_day !== undefined ? sunData.max_loss_min_day : (sunLossIdx >= 0 ? sunDeriv[sunLossIdx] : -3.74);
+  const sunGainDateStr = sunData.max_gain_day ? formatDateLabel(`2026-${sunData.max_gain_day}`) : 'Mar 20';
+  const sunLossDateStr = sunData.max_loss_day ? formatDateLabel(`2026-${sunData.max_loss_day}`) : 'Sep 23';
+
+  const sunGainMarkerData = new Array(labels.length).fill(null);
+  if (sunGainIdx >= 0) sunGainMarkerData[sunGainIdx] = sunGainVal;
+  const sunLossMarkerData = new Array(labels.length).fill(null);
+  if (sunLossIdx >= 0) sunLossMarkerData[sunLossIdx] = sunLossVal;
+
   if (charts.harmonicDerivative) {
     charts.harmonicDerivative.destroy();
   }
@@ -1540,7 +1628,7 @@ function renderHarmonicDerivativeChart() {
       labels: labels,
       datasets: [
         {
-          label: `Steepest Increase: ${warmDateStr} (+${warmRateVal.toFixed(3)} ${unitRate})`,
+          label: `Steepest Temp Warming: ${warmDateStr} (+${warmRateVal.toFixed(3)} ${unitRate})`,
           data: warmMarkerData,
           borderColor: '#00e676',
           backgroundColor: '#00e676',
@@ -1548,10 +1636,11 @@ function renderHarmonicDerivativeChart() {
           pointHoverRadius: 9,
           pointStyle: 'circle',
           showLine: false,
+          yAxisID: 'y',
           order: 0
         },
         {
-          label: `Steepest Decrease: ${coolDateStr} (${coolRateVal.toFixed(3)} ${unitRate})`,
+          label: `Steepest Temp Cooling: ${coolDateStr} (${coolRateVal.toFixed(3)} ${unitRate})`,
           data: coolMarkerData,
           borderColor: '#ff1744',
           backgroundColor: '#ff1744',
@@ -1559,21 +1648,59 @@ function renderHarmonicDerivativeChart() {
           pointHoverRadius: 9,
           pointStyle: 'circle',
           showLine: false,
+          yAxisID: 'y',
           order: 0
+        },
+        {
+          label: `Spring Equinox Sunlight Peak: ${sunGainDateStr} (+${sunGainVal.toFixed(2)} min/d)`,
+          data: sunGainMarkerData,
+          borderColor: '#ffd54f',
+          backgroundColor: '#ffd54f',
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          pointStyle: 'rectRot',
+          showLine: false,
+          yAxisID: 'y1',
+          order: 0
+        },
+        {
+          label: `Autumn Equinox Sunlight Dip: ${sunLossDateStr} (${sunLossVal.toFixed(2)} min/d)`,
+          data: sunLossMarkerData,
+          borderColor: '#ffb74d',
+          backgroundColor: '#ffb74d',
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          pointStyle: 'rectRot',
+          showLine: false,
+          yAxisID: 'y1',
+          order: 0
+        },
+        {
+          label: `Daylight Change (min/day) [Right Axis]`,
+          data: sunDeriv,
+          borderColor: '#fbc02d',
+          backgroundColor: 'rgba(251, 192, 45, 0.08)',
+          borderDash: [5, 4],
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.35,
+          yAxisID: 'y1',
+          order: 3
         },
         {
           label: `Symmetric 1st Harm Rate (${unitRate})`,
           data: derivH1,
-          borderColor: 'rgba(148, 163, 184, 0.5)',
+          borderColor: 'rgba(148, 163, 184, 0.45)',
           borderDash: [5, 5],
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           pointRadius: 0,
           tension: 0.35,
+          yAxisID: 'y',
           order: 2
         },
         {
-          label: `True 2-Harmonic Slope (${unitRate})`,
+          label: `True 2-Harmonic Temp Slope (${unitRate})`,
           data: derivComposite,
           borderColor: '#26c6da',
           backgroundColor: 'rgba(38, 198, 218, 0.08)',
@@ -1581,6 +1708,7 @@ function renderHarmonicDerivativeChart() {
           borderWidth: 2.5,
           pointRadius: 0,
           tension: 0.35,
+          yAxisID: 'y',
           order: 1
         }
       ]
@@ -1600,6 +1728,11 @@ function renderHarmonicDerivativeChart() {
           callbacks: {
             label: (context) => {
               const val = context.parsed.y;
+              if (val === null || val === undefined) return '';
+              const isSun = context.dataset.yAxisID === 'y1' || context.dataset.label.includes('Sunlight') || context.dataset.label.includes('Daylight');
+              if (isSun) {
+                return `${context.dataset.label}: ${val >= 0 ? '+' : ''}${val.toFixed(2)} min/day`;
+              }
               return `${context.dataset.label}: ${val >= 0 ? '+' : ''}${val.toFixed(3)} ${unitRate}`;
             }
           }
@@ -1611,9 +1744,26 @@ function renderHarmonicDerivativeChart() {
           ticks: { color: '#64748b', maxTicksLimit: 12 }
         },
         y: {
-          title: { display: true, text: `Daily Change (${unitRate})`, color: '#94a3b8' },
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: { display: true, text: `Temperature Slope (${unitRate})`, color: '#26c6da' },
           grid: { color: 'rgba(255, 255, 255, 0.08)' },
-          ticks: { color: '#64748b' }
+          ticks: {
+            color: '#64748b',
+            callback: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`
+          }
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: { display: true, text: 'Daylight Change (min/day)', color: '#fbc02d' },
+          grid: { drawOnChartArea: false },
+          ticks: {
+            color: '#fbc02d',
+            callback: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)} m/d`
+          }
         }
       }
     }

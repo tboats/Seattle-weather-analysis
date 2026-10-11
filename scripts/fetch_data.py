@@ -453,11 +453,48 @@ def fetch_seattle_weather():
             }
         }
 
+    def compute_daylight_harmonic_payload(series_hours):
+        n = len(series_hours)
+        omega = 2.0 * math.pi / n
+        a0 = sum(series_hours) / n
+        a1 = (2.0 / n) * sum(y * math.cos(omega * t) for t, y in enumerate(series_hours))
+        b1 = (2.0 / n) * sum(y * math.sin(omega * t) for t, y in enumerate(series_hours))
+        a2 = (2.0 / n) * sum(y * math.cos(2.0 * omega * t) for t, y in enumerate(series_hours))
+        b2 = (2.0 / n) * sum(y * math.sin(2.0 * omega * t) for t, y in enumerate(series_hours))
+
+        # dD/dt in minutes per day: 60 * d(hours)/dt
+        deriv_unrounded = [
+            60.0 * (
+                -a1 * omega * math.sin(omega * t) + b1 * omega * math.cos(omega * t)
+                - 2.0 * a2 * omega * math.sin(2.0 * omega * t) + 2.0 * b2 * omega * math.cos(2.0 * omega * t)
+            ) for t in range(n)
+        ]
+        deriv_min = [round(val, 2) for val in deriv_unrounded]
+
+        max_idx = deriv_unrounded.index(max(deriv_unrounded))
+        min_idx = deriv_unrounded.index(min(deriv_unrounded))
+
+        return {
+            'a0_hrs': round(a0, 2),
+            'max_gain_min_day': max(deriv_min),
+            'max_gain_day': dates_365[max_idx],
+            'max_loss_min_day': min(deriv_min),
+            'max_loss_day': dates_365[min_idx],
+            'derivative': deriv_min
+        }
+
+    daylight_payload = compute_daylight_harmonic_payload([climate_normals[d]['avg_daylight_hrs'] for d in dates_365])
+
     harmonic_analysis = {
         'high': compute_harmonic_payload([climate_normals[d]['raw_avg_high'] for d in dates_365]),
         'mean': compute_harmonic_payload([climate_normals[d]['raw_avg_mean'] for d in dates_365]),
-        'low': compute_harmonic_payload([climate_normals[d]['raw_avg_low'] for d in dates_365])
+        'low': compute_harmonic_payload([climate_normals[d]['raw_avg_low'] for d in dates_365]),
+        'daylight': daylight_payload
     }
+
+    # Attach daylight_derivative to each series' curves for convenient client plotting
+    for k in ['high', 'mean', 'low']:
+        harmonic_analysis[k]['curves']['daylight_derivative'] = daylight_payload['derivative']
 
     result = {
         'location': 'Seattle, WA',

@@ -703,6 +703,15 @@ h3 {
   color: #ff5252;
 }
 
+.inflection-pill.sun {
+  border-color: rgba(251, 192, 45, 0.35);
+  background: rgba(251, 192, 45, 0.08);
+}
+
+.inflection-pill.sun strong {
+  color: #fbc02d;
+}
+
 .pill-label {
   color: var(--text-dim);
 }
