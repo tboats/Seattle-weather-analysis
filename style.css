@@ -831,4 +831,300 @@ h3 {
   .chart-wrapper {
     height: 320px;
   }
+  .scatter-chart-wrapper {
+    height: 380px;
+  }
+  .forecast-controls-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lead-day-slider-wrap {
+    min-width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Tab Navigation & Forecast Verifier Styles
+   ========================================================================== */
+
+/* Main Tab Navigation */
+.app-tabs-nav {
+  display: flex;
+  gap: 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.tab-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.4rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.tab-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  border-color: var(--border-color-active);
+  transform: translateY(-1px);
+}
+
+.tab-nav-btn.active {
+  background: linear-gradient(135deg, rgba(255, 112, 67, 0.18), rgba(38, 198, 218, 0.18));
+  border-color: var(--accent-orange);
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(255, 112, 67, 0.25);
+}
+
+.tab-nav-btn .tab-badge {
+  font-size: 0.72rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 112, 67, 0.2);
+  color: #ff9e80;
+  border: 1px solid rgba(255, 112, 67, 0.4);
+}
+
+.tab-content-view {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.tab-content-view.hidden {
+  display: none !important;
+}
+
+/* Forecast Controls Bar */
+.forecast-controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  background: rgba(18, 24, 36, 0.7);
+  padding: 1.2rem 1.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  backdrop-filter: blur(8px);
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.control-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lead-day-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 280px;
+}
+
+.lead-day-badge {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(38, 198, 218, 0.12);
+  border: 1px solid rgba(38, 198, 218, 0.3);
+  padding: 0.3rem 0.75rem;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.custom-range {
+  flex: 1;
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Provider Filter Chips */
+.provider-chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.provider-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.provider-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+.provider-chip.active {
+  color: #fff;
+  border-color: currentColor;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
+}
+
+.provider-chip .chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Scatter Container & Live Stats */
+.scatter-chart-wrapper {
+  position: relative;
+  height: 520px;
+  width: 100%;
+}
+
+.scatter-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.provider-stat-card {
+  background: rgba(18, 24, 36, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1.1rem;
+  transition: all var(--transition-fast);
+}
+
+.provider-stat-card:hover {
+  border-color: var(--border-color-active);
+  background: rgba(24, 32, 48, 0.7);
+}
+
+.provider-stat-card .stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.provider-stat-card .stat-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.provider-stat-card .stat-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 0.75rem;
+}
+
+.stat-metric-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+.stat-metric-row .metric-k {
+  color: var(--text-dim);
+}
+
+.stat-metric-row .metric-v {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* Scorecard Table */
+.scorecard-table-container {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: rgba(18, 24, 36, 0.5);
+  margin-top: 1rem;
+}
+
+.scorecard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.scorecard-table th {
+  background: rgba(24, 32, 48, 0.9);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.scorecard-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+}
+
+.scorecard-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.scorecard-table .winner-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(38, 198, 218, 0.15);
+  color: #80deea;
+  border: 1px solid rgba(38, 198, 218, 0.3);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.negative-skill {
+  color: #ef5350 !important;
+  font-weight: 600;
+}
+
+.positive-skill {
+  color: #26a69a !important;
+  font-weight: 600;
 }

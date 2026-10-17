@@ -1,9 +1,92 @@
 import urllib.request
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 import math
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from dateutil.tz import gettz as ZoneInfo
+
+def compute_solar_times_for_date(d_obj, lat=47.6062, lon=-122.3321):
+    tz_local = ZoneInfo('America/Los_Angeles')
+    tz_standard = timezone(timedelta(hours=-8))
+    
+    N = d_obj.timetuple().tm_yday
+    lngHour = lon / 15.0
+    M = (0.9856 * N) - 3.289
+    L = (M + (1.916 * math.sin(math.radians(M))) + (0.020 * math.sin(math.radians(2 * M))) + 282.634) % 360
+    
+    RA = math.degrees(math.atan(0.91764 * math.tan(math.radians(L)))) % 360
+    Lquadrant = (math.floor(L / 90.0)) * 90.0
+    RAquadrant = (math.floor(RA / 90.0)) * 90.0
+    RA = (RA + (Lquadrant - RAquadrant)) / 15.0
+    
+    sinDec = 0.39782 * math.sin(math.radians(L))
+    cosDec = math.cos(math.asin(sinDec))
+    
+    zenith = 90.8333 # 90 deg 50 arcmin (atmospheric refraction + solar disk radius)
+    cosH = (math.cos(math.radians(zenith)) - (sinDec * math.sin(math.radians(lat)))) / (cosDec * math.cos(math.radians(lat)))
+    
+    H_set = math.degrees(math.acos(cosH))
+    H_rise = 360.0 - H_set
+    
+    daylight_hours = 2.0 * H_set / 15.0
+    dur_min = daylight_hours * 60.0
+    
+    T_rise = (H_rise / 15.0) + RA - (0.06571 * N) - 6.622 - lngHour
+    T_noon = T_rise + (daylight_hours / 2.0)
+    T_set = T_rise + daylight_hours
+    
+    dt_base = datetime(d_obj.year, d_obj.month, d_obj.day, tzinfo=timezone.utc)
+    sr_utc = dt_base + timedelta(hours=T_rise)
+    ss_utc = dt_base + timedelta(hours=T_set)
+    sn_utc = dt_base + timedelta(hours=T_noon)
+    
+    sr_loc = sr_utc.astimezone(tz_local)
+    ss_loc = ss_utc.astimezone(tz_local)
+    sn_loc = sn_utc.astimezone(tz_local)
+    
+    sr_std = sr_utc.astimezone(tz_standard)
+    ss_std = ss_utc.astimezone(tz_standard)
+    sn_std = sn_utc.astimezone(tz_standard)
+    
+    dur_h = int(dur_min // 60)
+    dur_m = int(round(dur_min % 60))
+    
+    def fmt_12h(dt):
+        h = dt.hour
+        m = dt.minute
+        ampm = 'PM' if h >= 12 else 'AM'
+        h12 = 12 if h % 12 == 0 else h % 12
+        return f"{h12}:{m:02d} {ampm}"
+    
+    return {
+        'date': d_obj.strftime('%Y-%m-%d'),
+        'mmdd': d_obj.strftime('%m-%d'),
+        'sr_civil': sr_loc.strftime('%H:%M'),
+        'ss_civil': ss_loc.strftime('%H:%M'),
+        'sn_civil': sn_loc.strftime('%H:%M'),
+        'sr_civil_12h': fmt_12h(sr_loc),
+        'ss_civil_12h': fmt_12h(ss_loc),
+        'sn_civil_12h': fmt_12h(sn_loc),
+        'sr_civil_dec': round(sr_loc.hour + sr_loc.minute / 60.0 + sr_loc.second / 3600.0, 3),
+        'ss_civil_dec': round(ss_loc.hour + ss_loc.minute / 60.0 + ss_loc.second / 3600.0, 3),
+        'sn_civil_dec': round(sn_loc.hour + sn_loc.minute / 60.0 + sn_loc.second / 3600.0, 3),
+        'sr_std': sr_std.strftime('%H:%M'),
+        'ss_std': ss_std.strftime('%H:%M'),
+        'sn_std': sn_std.strftime('%H:%M'),
+        'sr_std_12h': fmt_12h(sr_std),
+        'ss_std_12h': fmt_12h(ss_std),
+        'sn_std_12h': fmt_12h(sn_std),
+        'sr_std_dec': round(sr_std.hour + sr_std.minute / 60.0 + sr_std.second / 3600.0, 3),
+        'ss_std_dec': round(ss_std.hour + ss_std.minute / 60.0 + ss_std.second / 3600.0, 3),
+        'sn_std_dec': round(sn_std.hour + sn_std.minute / 60.0 + sn_std.second / 3600.0, 3),
+        'daylight_min': round(dur_min, 1),
+        'daylight_hrs_dec': round(daylight_hours, 2),
+        'daylight_str': f"{dur_h}h {dur_m:02d}m"
+    }
 
 def fetch_seattle_weather():
     print("Fetching historical climate data (2015-2025) for Seattle, WA...")
@@ -234,15 +317,35 @@ def fetch_seattle_weather():
             by_month_data[m_key]['m_obs'].append(m)
             by_month_data[m_key]['m_avg'].append(normal['avg_mean'])
 
+        d_obj = datetime.strptime(t, '%Y-%m-%d').date()
+        solar_info = compute_solar_times_for_date(d_obj, lat, lon)
+
         observations.append({
             'date': t,
             'mmdd': mmdd,
             'observed_high': h,
             'observed_low': l,
             'observed_mean': m,
-            'daylight_hours': daylight_hrs,
-            'sunrise': sr[11:] if sr and len(sr) >= 16 else None,
-            'sunset': ss[11:] if ss and len(ss) >= 16 else None,
+            'daylight_hours': solar_info['daylight_hrs_dec'],
+            'daylight_minutes': solar_info['daylight_min'],
+            'daylight_str': solar_info['daylight_str'],
+            'sunrise': solar_info['sr_civil'],
+            'sunset': solar_info['ss_civil'],
+            'solar_noon': solar_info['sn_civil'],
+            'sunrise_12h': solar_info['sr_civil_12h'],
+            'sunset_12h': solar_info['ss_civil_12h'],
+            'solar_noon_12h': solar_info['sn_civil_12h'],
+            'sunrise_dec': solar_info['sr_civil_dec'],
+            'sunset_dec': solar_info['ss_civil_dec'],
+            'solar_noon_dec': solar_info['sn_civil_dec'],
+            'sunrise_std': solar_info['sr_std'],
+            'sunset_std': solar_info['ss_std'],
+            'solar_noon_std': solar_info['sn_std'],
+            'sunrise_std_12h': solar_info['sr_std_12h'],
+            'sunset_std_12h': solar_info['ss_std_12h'],
+            'sunrise_std_dec': solar_info['sr_std_dec'],
+            'sunset_std_dec': solar_info['ss_std_dec'],
+            'solar_noon_std_dec': solar_info['sn_std_dec'],
             'observed_precip_in': p_val,
             'cum_observed_precip_in': round(cum_obs_pr, 2),
             'cum_avg_precip_in': round(cum_norm_pr, 2),
@@ -496,6 +599,61 @@ def fetch_seattle_weather():
     for k in ['high', 'mean', 'low']:
         harmonic_analysis[k]['curves']['daylight_derivative'] = daylight_payload['derivative']
 
+    # 7. Solar Schedule (Sunrise, Sunset, Solar Noon) & Extrema
+    solar_records = [
+        compute_solar_times_for_date(datetime.strptime(o['date'], '%Y-%m-%d').date(), lat, lon)
+        for o in observations
+    ]
+    earliest_sr = min(solar_records, key=lambda x: x['sr_civil_dec'])
+    latest_sr = max(solar_records, key=lambda x: x['sr_civil_dec'])
+    earliest_ss = min(solar_records, key=lambda x: x['ss_civil_dec'])
+    latest_ss = max(solar_records, key=lambda x: x['ss_civil_dec'])
+    max_daylight = max(solar_records, key=lambda x: x['daylight_min'])
+    min_daylight = min(solar_records, key=lambda x: x['daylight_min'])
+    swing_min = max_daylight['daylight_min'] - min_daylight['daylight_min']
+    swing_str = f"{int(swing_min // 60)}h {int(round(swing_min % 60))}m"
+
+    solar_schedule = {
+        'records': solar_records,
+        'extrema': {
+            'earliest_sunrise': {
+                'time_12h': earliest_sr['sr_civil_12h'],
+                'time_24h': earliest_sr['sr_civil'],
+                'date': earliest_sr['date'],
+                'mmdd': earliest_sr['mmdd']
+            },
+            'latest_sunrise': {
+                'time_12h': latest_sr['sr_civil_12h'],
+                'time_24h': latest_sr['sr_civil'],
+                'date': latest_sr['date'],
+                'mmdd': latest_sr['mmdd']
+            },
+            'earliest_sunset': {
+                'time_12h': earliest_ss['ss_civil_12h'],
+                'time_24h': earliest_ss['ss_civil'],
+                'date': earliest_ss['date'],
+                'mmdd': earliest_ss['mmdd']
+            },
+            'latest_sunset': {
+                'time_12h': latest_ss['ss_civil_12h'],
+                'time_24h': latest_ss['ss_civil'],
+                'date': latest_ss['date'],
+                'mmdd': latest_ss['mmdd']
+            },
+            'max_daylight': {
+                'duration': max_daylight['daylight_str'],
+                'minutes': max_daylight['daylight_min'],
+                'date': max_daylight['date']
+            },
+            'min_daylight': {
+                'duration': min_daylight['daylight_str'],
+                'minutes': min_daylight['daylight_min'],
+                'date': min_daylight['date']
+            },
+            'annual_daylight_swing': swing_str
+        }
+    }
+
     result = {
         'location': 'Seattle, WA',
         'latitude': lat,
@@ -513,6 +671,7 @@ def fetch_seattle_weather():
         'precip_stats': precip_stats,
         'climate_normals': climate_normals,
         'harmonic_analysis': harmonic_analysis,
+        'solar_schedule': solar_schedule,
         'observations': observations,
         'cross_correlation': cross_corr
     }

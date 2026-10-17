@@ -21,6 +21,10 @@ An interactive web visualization exploring **Seattle, Washington** weather obser
    - Quantifies the **34-day empirical thermal lag** ($r = 0.9808$) between peak solar daylight duration (Summer Solstice, June 21) and peak mean temperature (July 25).
    - Interactive lag slider offset ($0$ to $60$ days) with live cross-correlation updates.
 5. **Cross-Correlation Spectrum $R(\tau)$ & Seasonal Hysteresis Loop**.
+6. **Forecast Calibration & Verification (Dedicated Tab)**:
+   - **Interactive Calibration Scatterplot**: Predicted vs. Actual temperature with 45° perfect forecast identity line ($y = x$), lead day slider ($0$ to $10$ days out), high/low temperature toggle, OLS calibration trendline overlay, and individual provider filtering (`NWS`, `Weather.com`, `Weather Tool`, `AccuWeather`).
+   - **Meteorological Skill vs. Climatology (MSSS)**: Proves the **5-day predictability horizon** where forecasts add value over 30-year climate normals before decaying to negative skill at Day 6+.
+   - **Balanced Benchmark Scorecard**: Apples-to-apples comparison on common verification dates, revealing NWS's dominance on Puget Sound overnight lows (0.94°F MAE, $r=0.920$) and systematic warm bias on daytime highs across models.
 
 ---
 

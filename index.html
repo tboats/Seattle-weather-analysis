@@ -38,8 +38,25 @@
       </div>
     </header>
 
-    <!-- Key Metrics Cards -->
-    <section class="metrics-grid">
+    <!-- Main Tab Navigation -->
+    <nav class="app-tabs-nav" aria-label="Main Navigation">
+      <button class="tab-nav-btn active" id="tab-btn-observational" data-tab="observational">
+        <span class="tab-icon">📊</span>
+        <span>Observational Analysis</span>
+      </button>
+      <button class="tab-nav-btn" id="tab-btn-forecast" data-tab="forecast">
+        <span class="tab-icon">🎯</span>
+        <span>Forecast Calibration &amp; Verifier</span>
+        <span class="tab-badge">New</span>
+      </button>
+    </nav>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 1: OBSERVATIONAL ANALYSIS                                        -->
+    <!-- ===================================================================== -->
+    <main class="tab-content-view" id="view-observational">
+      <!-- Key Metrics Cards -->
+      <section class="metrics-grid">
       <div class="metric-card">
         <div class="metric-icon">☀️</div>
         <div class="metric-data">
@@ -412,6 +429,61 @@
       </div>
     </section>
 
+    <!-- Plot 3: Annual Solar Schedule (Sunrise, Sunset & Daylight Envelope) -->
+    <section class="chart-section card" id="section-solar-schedule">
+      <div class="chart-header">
+        <div>
+          <h2>Annual Solar Schedule: Sunrise &amp; Sunset Trajectory</h2>
+          <p class="chart-desc">
+            Visualizing the daily march of sunrise, solar noon, and sunset across the year in Seattle (47.6° N). 
+            Observe how daylight duration swells from <strong>8h 25m</strong> on the Winter Solstice (07:54 AM – 4:19 PM PST) to <strong>15h 59m</strong> on the Summer Solstice (05:11 AM – 9:11 PM PDT).
+          </p>
+        </div>
+        <div class="chart-actions">
+          <div class="toggle-group-compact">
+            <label class="toggle-switch-sm" title="Toggle between local civil clock time (with DST) and fixed standard astronomical solar time (UTC-8)">
+              <input type="checkbox" id="toggle-solar-dst" checked>
+              <span class="slider-sm"></span>
+              <span class="lbl-sm">Civil Clock Time (DST)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Solar Summary Panels -->
+      <div class="residuals-summary-panel">
+        <div class="res-stat-item">
+          <span class="res-stat-title">🌅 Earliest Sunrise</span>
+          <span class="res-stat-val warm" id="val-solar-early-sr">5:10 AM</span>
+          <span class="res-stat-sub" id="val-solar-early-sr-sub">Mid-June (Jun 17)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">🌇 Latest Sunset</span>
+          <span class="res-stat-val warm" id="val-solar-late-ss">9:11 PM</span>
+          <span class="res-stat-sub" id="val-solar-late-ss-sub">Late June (Jun 26)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">❄️ Latest Sunrise</span>
+          <span class="res-stat-val blue" id="val-solar-late-sr">7:57 AM</span>
+          <span class="res-stat-sub" id="val-solar-late-sr-sub">New Year (Jan 01)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">🌙 Earliest Sunset</span>
+          <span class="res-stat-val blue" id="val-solar-early-ss">4:17 PM</span>
+          <span class="res-stat-sub" id="val-solar-early-ss-sub">Early Dec (Dec 11)</span>
+        </div>
+        <div class="res-stat-item">
+          <span class="res-stat-title">☀️ Daylight Swing</span>
+          <span class="res-stat-val warm-badge" id="val-solar-swing">7h 34m Spread</span>
+          <span class="res-stat-sub" id="val-solar-swing-sub">15h 59m max vs 8h 25m min</span>
+        </div>
+      </div>
+
+      <div class="chart-wrapper">
+        <canvas id="solar-schedule-chart"></canvas>
+      </div>
+    </section>
+
     <!-- Secondary Analysis Grid -->
     <div class="analysis-grid">
       <!-- Cross Correlation Plot -->
@@ -459,10 +531,241 @@
         </div>
       </div>
     </footer>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 2: FORECAST VERIFICATION & CALIBRATION                            -->
+    <!-- ===================================================================== -->
+    <main class="tab-content-view hidden" id="view-forecast">
+      <!-- Forecast Key Metrics Cards -->
+      <section class="metrics-grid">
+        <div class="metric-card" id="card-best-high">
+          <div class="metric-icon">☀️</div>
+          <div class="metric-data">
+            <span class="metric-label">Best Daytime High (Day 0–1)</span>
+            <span class="metric-value">Loading...</span>
+            <span class="metric-sub">MAE &amp; Correlation</span>
+          </div>
+        </div>
+        <div class="metric-card highlight" id="card-best-low">
+          <div class="metric-icon">🌙</div>
+          <div class="metric-data">
+            <span class="metric-label">Best Overnight Low (Day 0)</span>
+            <span class="metric-value">Loading...</span>
+            <span class="metric-sub">Captures Puget Marine Inversion</span>
+          </div>
+        </div>
+        <div class="metric-card highlight-warm" id="card-horizon">
+          <div class="metric-icon">⏱️</div>
+          <div class="metric-data">
+            <span class="metric-label">Predictability Horizon</span>
+            <span class="metric-value">5 Days Out</span>
+            <span class="metric-sub">Day 6+ MSSS &lt; 0 (Climatology wins)</span>
+          </div>
+        </div>
+        <div class="metric-card highlight-blue" id="card-systemic-bias">
+          <div class="metric-icon">⚖️</div>
+          <div class="metric-data">
+            <span class="metric-label">Systematic Seattle Bias</span>
+            <span class="metric-value">+1.8°F High / -1.1°F Low</span>
+            <span class="metric-sub">Highs too warm, night lows too cold</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Forecast Calibration Scatterplot (The Core User Request) -->
+      <section class="chart-section card">
+        <div class="chart-header">
+          <div>
+            <h2>Forecast Calibration &amp; Accuracy: Anomaly vs. Actual</h2>
+            <p class="chart-desc">
+              Evaluating predicted temperature anomalies (departures from 30-year climatological normals) on the x-axis vs. actual anomalies recorded in Seattle on the y-axis.
+              This isolates genuine forecasting skill from seasonal cooling drift. The dashed 45° line represents a <strong>perfect forecast (y = x)</strong>, while the center crosshair <strong>(0, 0)</strong> marks the climatological normal.
+            </p>
+          </div>
+        </div>
+
+        <!-- Interactive Controls Bar -->
+        <div class="forecast-controls-bar">
+          <!-- Plot Mode Select (Anomaly vs Absolute) -->
+          <div class="control-group">
+            <span class="control-label">Plot Mode:</span>
+            <div class="toggle-group">
+              <button class="pill-btn active" id="scatter-mode-btn-anomaly">📈 Anomaly vs Normal (ACC)</button>
+              <button class="pill-btn" id="scatter-mode-btn-absolute">🌡️ Absolute Temp</button>
+            </div>
+          </div>
+
+          <!-- Metric Select (High vs Low) -->
+          <div class="control-group">
+            <span class="control-label">Metric:</span>
+            <div class="toggle-group">
+              <button class="pill-btn active" id="metric-btn-high">☀️ High Temp</button>
+              <button class="pill-btn" id="metric-btn-low">🌙 Low Temp</button>
+            </div>
+          </div>
+
+          <!-- Lead Days Slider -->
+          <div class="control-group">
+            <span class="control-label">Lead Time:</span>
+            <div class="lead-day-slider-wrap">
+              <input type="range" id="lead-days-slider" class="custom-range" min="0" max="10" step="1" value="0">
+              <span class="lead-day-badge" id="lead-days-badge">0 Days Out</span>
+            </div>
+          </div>
+
+          <!-- Provider Filters -->
+          <div class="control-group">
+            <span class="control-label">Providers:</span>
+            <div class="provider-chips">
+              <button class="provider-chip active" data-provider="nws" style="border-color:#10b981;">
+                <span class="chip-dot" style="background:#10b981;"></span> NWS
+              </button>
+              <button class="provider-chip active" data-provider="weather_com" style="border-color:#8b5cf6;">
+                <span class="chip-dot" style="background:#8b5cf6;"></span> Weather.com
+              </button>
+              <button class="provider-chip active" data-provider="weather_tool" style="border-color:#06b6d4;">
+                <span class="chip-dot" style="background:#06b6d4;"></span> Weather Tool
+              </button>
+              <button class="provider-chip active" data-provider="accuweather" style="border-color:#f59e0b;">
+                <span class="chip-dot" style="background:#f59e0b;"></span> AccuWeather
+              </button>
+            </div>
+          </div>
+
+          <!-- Trendline & Cohort Toggles -->
+          <div class="control-group">
+            <label class="toggle-label" style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; color:#cbd5e1; cursor:pointer;">
+              <input type="checkbox" id="toggle-trendlines">
+              <span>Show Calibration Fits (β slope)</span>
+            </label>
+            <div class="toggle-group" style="margin-left:0.5rem;">
+              <button class="pill-btn active" id="cohort-btn-all" style="font-size:0.78rem;">All Data</button>
+              <button class="pill-btn" id="cohort-btn-common" style="font-size:0.78rem;" title="Compare strictly on common dates where all providers issued forecasts">Common Dates Only</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scatter Canvas -->
+        <div class="scatter-chart-wrapper">
+          <canvas id="forecast-scatter-chart"></canvas>
+        </div>
+
+        <!-- Live Scatter Stats Grid -->
+        <div class="scatter-stats-grid" id="scatter-live-stats">
+          <!-- Dynamically populated by forecast_app.js -->
+        </div>
+      </section>
+
+      <!-- Section: Skill Degradation & Bias Distribution Charts -->
+      <div class="analysis-grid">
+        <!-- Lead-Time Degradation -->
+        <section class="chart-section card">
+          <div class="chart-header">
+            <div>
+              <h3>Skill Degradation Across Lead Time (0–10 Days)</h3>
+              <p class="chart-desc">
+                Error growth and predictability limits. When MSSS drops below 0.0 (red dashed line), the forecast has <strong>negative skill</strong> compared to 30-year historical climatology.
+              </p>
+            </div>
+            <div class="toggle-group">
+              <button class="pill-btn active deg-metric-btn" data-metric="mae">MAE</button>
+              <button class="pill-btn deg-metric-btn" data-metric="rmse">RMSE</button>
+              <button class="pill-btn deg-metric-btn" data-metric="msss">Skill (MSSS)</button>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="lead-degradation-chart"></canvas>
+          </div>
+        </section>
+
+        <!-- Systematic Model Bias -->
+        <section class="chart-section card">
+          <div class="chart-header">
+            <div>
+              <h3>Systematic Mean Error (Bias) by Provider</h3>
+              <p class="chart-desc">
+                Warm bias (+) vs. Cold bias (-) at the currently selected lead day. Notice daytime highs skew persistently warm while nighttime lows skew cool.
+              </p>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="bias-distribution-chart"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <!-- Section: Head-to-Head Scorecard Table -->
+      <section class="chart-section card">
+        <div class="chart-header">
+          <div>
+            <h2>Head-to-Head Provider Scorecard &amp; Benchmark</h2>
+            <p class="chart-desc">
+              Comprehensive statistical evaluation across major forecast horizons (Days 0, 1, 3, 5, 7, 10).
+              The row corresponding to the active lead day is highlighted.
+            </p>
+          </div>
+        </div>
+        <div class="scorecard-table-container">
+          <table class="scorecard-table">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Lead Time</th>
+                <th>Sample (N)</th>
+                <th>High MAE</th>
+                <th>Low MAE</th>
+                <th>High Bias</th>
+                <th>Low Bias</th>
+                <th>Anomaly r</th>
+                <th>MSSS Skill</th>
+                <th>Leader Badge</th>
+              </tr>
+            </thead>
+            <tbody id="scorecard-tbody">
+              <!-- Dynamically rendered -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Forecast Insights Footer -->
+      <footer class="app-footer card">
+        <h3>💡 Meteorological Insights &amp; Verification Lessons</h3>
+        <div class="insights-grid">
+          <div class="insight-item">
+            <h4>Why Raw Correlation Fails in Weather Forecasting</h4>
+            <p>
+              Seattle temperatures naturally drop from summer into fall (August normal high: 76°F → October: 60°F). Any model that simply tracks the calendar shows a high correlation (r ≈ 0.85–0.95) from seasonal drift alone. At Day 7, AccuWeather has raw r = 0.685, but its <strong>Anomaly Correlation is only 0.074</strong>, proving near-zero skill beyond seasonal normals.
+            </p>
+          </div>
+          <div class="insight-item">
+            <h4>The Puget Sound Marine Inversion: Why NWS Dominates Lows</h4>
+            <p>
+              On Day 0 overnight lows, NWS achieves an outstanding <strong>0.94°F MAE (r = 0.920)</strong> compared to ~2.6°F MAE for commercial models. NWS human forecasters and regional models accurately resolve Puget Sound marine air intrusions and nighttime radiational inversions that global grid models smooth over.
+            </p>
+          </div>
+          <div class="insight-item">
+            <h4>The 5-Day Predictability Horizon in the Pacific Northwest</h4>
+            <p>
+              Mean Squared Skill Score (MSSS vs. 30-year climatology) remains positive through Day 4–5, then crosses zero into negative territory by Day 6. Beyond Day 5, an average resident would get a more accurate forecast by simply looking up the historical climate normal for that day.
+            </p>
+          </div>
+          <div class="insight-item">
+            <h4>Systemic Warm &amp; Cool Biases</h4>
+            <p>
+              Across almost all providers and lead times, Seattle forecasts exhibit a persistent <strong>warm bias on daytime highs (+1.5°F to +4.6°F)</strong> and a <strong>cool bias on nighttime lows (-0.5°F to -1.5°F)</strong>. Commercial models systematically overestimate the diurnal temperature range in the maritime climate.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </main>
   </div>
 
   <!-- Data Preload with cache-busting timestamp -->
-  <script src="weather_data.js?v=20261011"></script>
-  <script src="app.js?v=20261011"></script>
+  <script src="weather_data.js?v=20261016"></script>
+  <script src="forecast_verifier_data.js?v=20261016"></script>
+  <script src="app.js?v=20261016"></script>
+  <script src="forecast_app.js?v=20261016"></script>
 </body>
 </html>

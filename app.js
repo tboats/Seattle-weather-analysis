@@ -9,6 +9,7 @@ let appState = {
   showRangeFill: true,
   currentLagDays: 0,
   data: null,
+  solarMode: 'civil', // 'civil' (with DST) or 'standard' (fixed UTC-8)
   harmonicSeries: 'high', // 'high', 'mean', 'low'
   harmonicToggles: {
     raw: true,
@@ -29,7 +30,8 @@ let charts = {
   crossCorr: null,
   hysteresis: null,
   harmonicWaveform: null,
-  harmonicDerivative: null
+  harmonicDerivative: null,
+  solarSchedule: null
 };
 
 // Helper Functions
@@ -175,6 +177,7 @@ async function loadWeatherData() {
         console.log(`Loaded fresh weather data from HTTP: ${path}`);
         ensureMonthlyDataPresent();
         ensureHarmonicDataPresent();
+        ensureSolarDataPresent();
         updateHeaderMetrics();
         renderAllCharts();
         return;
@@ -190,6 +193,7 @@ async function loadWeatherData() {
     appState.data = window.SEATTLE_WEATHER_DATA;
     ensureMonthlyDataPresent();
     ensureHarmonicDataPresent();
+    ensureSolarDataPresent();
     updateHeaderMetrics();
     renderAllCharts();
     return;
@@ -293,6 +297,143 @@ function computeClientDaylightPayload(seriesHours, days365) {
     max_loss_min_day: Math.round(maxLossVal * 100) / 100,
     max_loss_day: days365[maxLossIdx],
     derivative: derivUnrounded.map(v => Math.round(v * 100) / 100)
+  };
+}
+
+function ensureSolarDataPresent() {
+  if (!appState.data) return;
+  if (appState.data.solar_schedule && appState.data.solar_schedule.records && appState.data.solar_schedule.records.length) {
+    return;
+  }
+  const obs = appState.data.observations;
+  if (!obs || !obs.length) return;
+
+  console.log('Computing solar_schedule dynamically on client fallback...');
+  const records = obs.map(o => computeSolarTimesForDateJS(o.date));
+  let earliestSr = records[0], latestSr = records[0];
+  let earliestSs = records[0], latestSs = records[0];
+  let maxDaylight = records[0], minDaylight = records[0];
+
+  for (let i = 1; i < records.length; i++) {
+    const r = records[i];
+    if (r.sr_civil_dec < earliestSr.sr_civil_dec) earliestSr = r;
+    if (r.sr_civil_dec > latestSr.sr_civil_dec) latestSr = r;
+    if (r.ss_civil_dec < earliestSs.ss_civil_dec) earliestSs = r;
+    if (r.ss_civil_dec > latestSs.ss_civil_dec) latestSs = r;
+    if (r.daylight_min > maxDaylight.daylight_min) maxDaylight = r;
+    if (r.daylight_min < minDaylight.daylight_min) minDaylight = r;
+  }
+
+  const swingMin = maxDaylight.daylight_min - minDaylight.daylight_min;
+  const swingStr = `${Math.floor(swingMin / 60)}h ${Math.round(swingMin % 60)}m`;
+
+  appState.data.solar_schedule = {
+    records: records,
+    extrema: {
+      earliest_sunrise: {
+        time_12h: earliestSr.sr_civil_12h,
+        time_24h: earliestSr.sr_civil,
+        date: earliestSr.date,
+        mmdd: earliestSr.mmdd
+      },
+      latest_sunrise: {
+        time_12h: latestSr.sr_civil_12h,
+        time_24h: latestSr.sr_civil,
+        date: latestSr.date,
+        mmdd: latestSr.mmdd
+      },
+      earliest_sunset: {
+        time_12h: earliestSs.ss_civil_12h,
+        time_24h: earliestSs.ss_civil,
+        date: earliestSs.date,
+        mmdd: earliestSs.mmdd
+      },
+      latest_sunset: {
+        time_12h: latestSs.ss_civil_12h,
+        time_24h: latestSs.ss_civil,
+        date: latestSs.date,
+        mmdd: latestSs.mmdd
+      },
+      max_daylight: {
+        duration: maxDaylight.daylight_str,
+        minutes: maxDaylight.daylight_min,
+        date: maxDaylight.date
+      },
+      min_daylight: {
+        duration: minDaylight.daylight_str,
+        minutes: minDaylight.daylight_min,
+        date: minDaylight.date
+      },
+      annual_daylight_swing: swingStr
+    }
+  };
+}
+
+function computeSolarTimesForDateJS(dStr, lat = 47.6062, lon = -122.3321) {
+  const parts = dStr.split('-').map(Number);
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  const startOfYear = new Date(Date.UTC(parts[0], 0, 1));
+  const N = Math.floor((d - startOfYear) / 86400000) + 1;
+  const lngHour = lon / 15.0;
+  const M = (0.9856 * N) - 3.289;
+  const rad = Math.PI / 180.0;
+  const deg = 180.0 / Math.PI;
+  let L = (M + (1.916 * Math.sin(M * rad)) + (0.020 * Math.sin(2 * M * rad)) + 282.634) % 360;
+  if (L < 0) L += 360;
+
+  let RA = (Math.atan(0.91764 * Math.tan(L * rad)) * deg) % 360;
+  if (RA < 0) RA += 360;
+  const Lquadrant = Math.floor(L / 90.0) * 90.0;
+  const RAquadrant = Math.floor(RA / 90.0) * 90.0;
+  RA = (RA + (Lquadrant - RAquadrant)) / 15.0;
+
+  const sinDec = 0.39782 * Math.sin(L * rad);
+  const cosDec = Math.cos(Math.asin(sinDec));
+  const zenith = 90.8333;
+  const cosH = (Math.cos(zenith * rad) - (sinDec * Math.sin(lat * rad))) / (cosDec * Math.cos(lat * rad));
+  const H_set = Math.acos(cosH) * deg;
+  const H_rise = 360.0 - H_set;
+  const daylightHours = 2.0 * H_set / 15.0;
+  const durMin = daylightHours * 60.0;
+
+  const T_rise = (H_rise / 15.0) + RA - (0.06571 * N) - 6.622 - lngHour;
+  const T_noon = T_rise + (daylightHours / 2.0);
+  const T_set = T_rise + daylightHours;
+
+  const msBase = d.getTime();
+  const srDate = new Date(msBase + T_rise * 3600000);
+  const ssDate = new Date(msBase + T_set * 3600000);
+  const snDate = new Date(msBase + T_noon * 3600000);
+
+  const tf = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit' });
+  const tf12 = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour12: true, hour: 'numeric', minute: '2-digit' });
+
+  const srParts = tf.format(srDate).split(':').map(Number);
+  const ssParts = tf.format(ssDate).split(':').map(Number);
+  const snParts = tf.format(snDate).split(':').map(Number);
+
+  const srStdH = (srDate.getUTCHours() - 8 + 24) % 24 + srDate.getUTCMinutes() / 60.0;
+  const ssStdH = (ssDate.getUTCHours() - 8 + 24) % 24 + ssDate.getUTCMinutes() / 60.0;
+  const snStdH = (snDate.getUTCHours() - 8 + 24) % 24 + snDate.getUTCMinutes() / 60.0;
+
+  return {
+    date: dStr,
+    mmdd: dStr.substring(5),
+    sr_civil: tf.format(srDate),
+    ss_civil: tf.format(ssDate),
+    sn_civil: tf.format(snDate),
+    sr_civil_12h: tf12.format(srDate),
+    ss_civil_12h: tf12.format(ssDate),
+    sn_civil_12h: tf12.format(snDate),
+    sr_civil_dec: Math.round((srParts[0] + srParts[1] / 60.0) * 1000) / 1000,
+    ss_civil_dec: Math.round((ssParts[0] + ssParts[1] / 60.0) * 1000) / 1000,
+    sn_civil_dec: Math.round((snParts[0] + snParts[1] / 60.0) * 1000) / 1000,
+    sr_std_dec: Math.round(srStdH * 1000) / 1000,
+    ss_std_dec: Math.round(ssStdH * 1000) / 1000,
+    sn_std_dec: Math.round(snStdH * 1000) / 1000,
+    daylight_min: Math.round(durMin * 10) / 10,
+    daylight_hrs_dec: Math.round(daylightHours * 100) / 100,
+    daylight_str: `${Math.floor(durMin / 60)}h ${Math.round(durMin % 60)}m`
   };
 }
 
@@ -489,6 +630,15 @@ function setupEventListeners() {
   if (tH2) tH2.addEventListener('change', (e) => { appState.harmonicToggles.h2 = e.target.checked; renderHarmonicWaveformChart(); });
   const tComp = document.getElementById('toggle-h-composite');
   if (tComp) tComp.addEventListener('change', (e) => { appState.harmonicToggles.composite = e.target.checked; renderHarmonicWaveformChart(); });
+
+  // Solar Schedule DST Toggle
+  const solarToggle = document.getElementById('toggle-solar-dst');
+  if (solarToggle) {
+    solarToggle.addEventListener('change', (e) => {
+      appState.solarMode = e.target.checked ? 'civil' : 'standard';
+      renderSolarScheduleChart();
+    });
+  }
 }
 
 function updateHeaderMetrics() {
@@ -649,6 +799,9 @@ function updateHeaderMetrics() {
     const elRainDaysSub = document.getElementById('val-rain-days-sub');
     if (elRainDaysSub) elRainDaysSub.textContent = `${precip_stats.wet_days_obs} Wet Days (Normal: ${precip_stats.wet_days_norm} days)`;
   }
+
+  // Update Solar Schedule Summary Metrics
+  updateSolarSummaryMetrics();
 }
 
 function updateLagSliderUI() {
@@ -674,6 +827,7 @@ function renderAllCharts() {
   try { renderPrecipDailyChart(); } catch(e) { console.error('Error in renderPrecipDailyChart:', e); }
   try { renderPrecipCumChart(); } catch(e) { console.error('Error in renderPrecipCumChart:', e); }
   try { updateSunTempLagChart(); } catch(e) { console.error('Error in updateSunTempLagChart:', e); }
+  try { renderSolarScheduleChart(); } catch(e) { console.error('Error in renderSolarScheduleChart:', e); }
   try { renderCrossCorrChart(); } catch(e) { console.error('Error in renderCrossCorrChart:', e); }
   try { renderHysteresisChart(); } catch(e) { console.error('Error in renderHysteresisChart:', e); }
   try { updateHarmonicSection(); } catch(e) { console.error('Error in updateHarmonicSection:', e); }
@@ -1246,6 +1400,210 @@ function updateSunTempLagChart() {
           title: { display: true, text: `Daily Mean Temp (°${appState.unit})`, color: '#26a69a' },
           grid: { drawOnChartArea: false },
           ticks: { color: '#26a69a' }
+        }
+      }
+    }
+  });
+}
+
+// --------------------------------------------------------------------------
+// Plot: Annual Solar Schedule (Sunrise, Sunset & Daylight Envelope)
+// --------------------------------------------------------------------------
+function updateSolarSummaryMetrics() {
+  if (!appState.data || !appState.data.solar_schedule) return;
+  const extrema = appState.data.solar_schedule.extrema;
+  if (!extrema) return;
+
+  const elEarlySr = document.getElementById('val-solar-early-sr');
+  if (elEarlySr) elEarlySr.textContent = extrema.earliest_sunrise.time_12h;
+  const elEarlySrSub = document.getElementById('val-solar-early-sr-sub');
+  if (elEarlySrSub) elEarlySrSub.textContent = `Mid-June (${formatDateLabel(extrema.earliest_sunrise.date)})`;
+
+  const elLateSs = document.getElementById('val-solar-late-ss');
+  if (elLateSs) elLateSs.textContent = extrema.latest_sunset.time_12h;
+  const elLateSsSub = document.getElementById('val-solar-late-ss-sub');
+  if (elLateSsSub) elLateSsSub.textContent = `Late June (${formatDateLabel(extrema.latest_sunset.date)})`;
+
+  const elLateSr = document.getElementById('val-solar-late-sr');
+  if (elLateSr) elLateSr.textContent = extrema.latest_sunrise.time_12h;
+  const elLateSrSub = document.getElementById('val-solar-late-sr-sub');
+  if (elLateSrSub) elLateSrSub.textContent = `New Year (${formatDateLabel(extrema.latest_sunrise.date)})`;
+
+  const elEarlySs = document.getElementById('val-solar-early-ss');
+  if (elEarlySs) elEarlySs.textContent = extrema.earliest_sunset.time_12h;
+  const elEarlySsSub = document.getElementById('val-solar-early-ss-sub');
+  if (elEarlySsSub) elEarlySsSub.textContent = `Early Dec (${formatDateLabel(extrema.earliest_sunset.date)})`;
+
+  const elSwing = document.getElementById('val-solar-swing');
+  if (elSwing) elSwing.textContent = `${extrema.annual_daylight_swing} Spread`;
+  const elSwingSub = document.getElementById('val-solar-swing-sub');
+  if (elSwingSub) elSwingSub.textContent = `${extrema.max_daylight.duration} max vs ${extrema.min_daylight.duration} min`;
+}
+
+function renderSolarScheduleChart() {
+  const canvas = document.getElementById('solar-schedule-chart');
+  if (!canvas || !appState.data) return;
+  ensureSolarDataPresent();
+  if (!appState.data.solar_schedule) return;
+
+  const ctx = canvas.getContext('2d');
+  const records = appState.data.solar_schedule.records;
+  if (!records || !records.length) return;
+
+  const isCivil = appState.solarMode === 'civil';
+  const srKey = isCivil ? 'sr_civil_dec' : 'sr_std_dec';
+  const ssKey = isCivil ? 'ss_civil_dec' : 'ss_std_dec';
+  const snKey = isCivil ? 'sn_civil_dec' : 'sn_std_dec';
+  const sr12Key = isCivil ? 'sr_civil_12h' : 'sr_std_12h';
+  const ss12Key = isCivil ? 'ss_civil_12h' : 'ss_std_12h';
+
+  const labels = records.map(r => formatDateLabel(r.date));
+  const srData = records.map(r => r[srKey]);
+  const ssData = records.map(r => r[ssKey]);
+  const snData = records.map(r => r[snKey]);
+
+  // Today marker
+  const todayIdx = records.length - 1;
+  const todaySrMarker = new Array(records.length).fill(null);
+  const todaySsMarker = new Array(records.length).fill(null);
+  todaySrMarker[todayIdx] = srData[todayIdx];
+  todaySsMarker[todayIdx] = ssData[todayIdx];
+
+  if (charts.solarSchedule) {
+    charts.solarSchedule.destroy();
+  }
+
+  charts.solarSchedule = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Sunrise (Dawn)',
+          data: srData,
+          borderColor: '#ff9800',
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          tension: isCivil ? 0.05 : 0.35,
+          order: 2
+        },
+        {
+          label: 'Sunset (Dusk / Daytime Envelope)',
+          data: ssData,
+          borderColor: '#ec407a',
+          backgroundColor: 'rgba(251, 192, 45, 0.16)',
+          fill: '-1',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          tension: isCivil ? 0.05 : 0.35,
+          order: 1
+        },
+        {
+          label: 'Solar Noon (Midday Sun)',
+          data: snData,
+          borderColor: 'rgba(255, 238, 88, 0.55)',
+          borderDash: [5, 4],
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: isCivil ? 0.05 : 0.35,
+          order: 3
+        },
+        {
+          label: `Today's Sunrise: ${records[todayIdx][sr12Key]}`,
+          data: todaySrMarker,
+          borderColor: '#ffca28',
+          backgroundColor: '#ff9800',
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          pointStyle: 'circle',
+          showLine: false,
+          order: 0
+        },
+        {
+          label: `Today's Sunset: ${records[todayIdx][ss12Key]}`,
+          data: todaySsMarker,
+          borderColor: '#f48fb1',
+          backgroundColor: '#ec407a',
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          pointStyle: 'circle',
+          showLine: false,
+          order: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#94a3b8',
+            font: { family: 'Inter', size: 12 },
+            filter: (item) => !item.text.includes("Today's")
+          }
+        },
+        tooltip: {
+          backgroundColor: '#182030',
+          titleColor: '#f0f4f8',
+          bodyColor: '#cbd5e1',
+          borderColor: 'rgba(255, 255, 255, 0.15)',
+          borderWidth: 1,
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              const idx = items[0].dataIndex;
+              return `${records[idx].date} (${labels[idx]})`;
+            },
+            label: (context) => {
+              const val = context.parsed.y;
+              if (val === null || val === undefined) return '';
+              const h = Math.floor(val);
+              const m = Math.round((val - h) * 60);
+              const ampm = h >= 12 ? 'PM' : 'AM';
+              const h12 = h % 12 === 0 ? 12 : h % 12;
+              const timeStr = `${h12}:${m < 10 ? '0' : ''}${m} ${ampm}`;
+              return `${context.dataset.label}: ${timeStr}`;
+            },
+            afterBody: (items) => {
+              if (!items.length) return '';
+              const idx = items[0].dataIndex;
+              const r = records[idx];
+              return `Daylight Duration: ${r.daylight_str} (${r.daylight_min} mins)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#64748b', maxTicksLimit: 12 }
+        },
+        y: {
+          min: 4.0,  // 4:00 AM
+          max: 22.5, // 10:30 PM
+          title: {
+            display: true,
+            text: isCivil ? 'Civil Clock Time (PDT in Summer / PST in Winter)' : 'Astronomical Standard Time (Fixed UTC-8)',
+            color: '#94a3b8'
+          },
+          grid: { color: 'rgba(255, 255, 255, 0.06)' },
+          ticks: {
+            color: '#94a3b8',
+            stepSize: 2,
+            callback: (val) => {
+              const h = Math.floor(val);
+              const ampm = h >= 12 ? 'PM' : 'AM';
+              const h12 = h % 12 === 0 ? 12 : h % 12;
+              return `${h12}:00 ${ampm}`;
+            }
+          }
         }
       }
     }
